@@ -19,3 +19,7 @@ The API health endpoint is `/actuator/health`. PostgreSQL, Redis, and MinIO data
 ## Configuration
 
 All local configuration is read from environment variables. `.env.example` lists the Compose variables; `.env` is local-only and git-ignored.
+
+Browsers upload and download media directly from MinIO using presigned URLs, so `MINIO_PUBLIC_ENDPOINT` must be the MinIO address as the browser sees it (default `http://localhost:9000`). The backend reaches MinIO inside Compose at `http://minio:9000`.
+
+MinIO no longer publishes free container images, so Compose and the integration tests use `pgsty/minio`, a community rebuild of the upstream release, pinned to a release tag.
