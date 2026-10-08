@@ -12,6 +12,7 @@ import com.keepsake.user.entity.FollowStatus;
 import com.keepsake.user.entity.User;
 import com.keepsake.user.repository.FollowRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,13 +86,17 @@ public class FollowService {
         if (viewerId.equals(ownerId)) {
             return Relationship.SELF;
         }
-        return followRepository.findById(new FollowId(viewerId, ownerId))
-                .map(Follow::getStatus)
+        return followStatus(viewerId, ownerId)
                 .map(status -> status == FollowStatus.ACCEPTED ? Relationship.FOLLOWING : Relationship.REQUESTED)
                 .orElse(Relationship.NONE);
     }
 
-    /** True when the viewer is the owner or has an ACCEPTED follow; a PENDING request does not count. */
+    @Transactional(readOnly = true)
+    public Optional<FollowStatus> followStatus(UUID followerId, UUID followeeId) {
+        return followRepository.findById(new FollowId(followerId, followeeId)).map(Follow::getStatus);
+    }
+
+    /** True only for an ACCEPTED follow; a PENDING request does not count. */
     @Transactional(readOnly = true)
     public boolean isAcceptedFollower(UUID viewerId, UUID ownerId) {
         return followRepository.existsByIdAndStatus(new FollowId(viewerId, ownerId), FollowStatus.ACCEPTED);
