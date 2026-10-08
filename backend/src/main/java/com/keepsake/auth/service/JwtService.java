@@ -65,8 +65,10 @@ public class JwtService {
             }
 
             String signingInput = parts[0] + "." + parts[1];
-            byte[] providedSignature = DECODER.decode(parts[2]);
-            if (!MessageDigest.isEqual(sign(signingInput), providedSignature)) {
+            // Compare the canonical encoding, not decoded bytes: the decoder ignores unused trailing bits, so
+            // several spellings of the last character would otherwise verify as the same signature.
+            byte[] expectedSignature = ENCODER.encodeToString(sign(signingInput)).getBytes(StandardCharsets.US_ASCII);
+            if (!MessageDigest.isEqual(expectedSignature, parts[2].getBytes(StandardCharsets.US_ASCII))) {
                 throw new InvalidAccessTokenException();
             }
 
