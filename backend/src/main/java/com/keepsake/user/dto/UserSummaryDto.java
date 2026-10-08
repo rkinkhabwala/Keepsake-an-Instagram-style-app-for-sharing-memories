@@ -1,11 +1,7 @@
 package com.keepsake.user.dto;
 
-import com.keepsake.user.entity.User;
 import java.util.UUID;
 
-public record UserSummaryDto(UUID id, String username, String displayName) {
-
-    public static UserSummaryDto from(User user) {
-        return new UserSummaryDto(user.getId(), user.getUsername(), user.getDisplayName());
-    }
+/** Build through {@link com.keepsake.user.service.UserSummaries}, which signs the avatar URL. */
+public record UserSummaryDto(UUID id, String username, String displayName, String avatarUrl) {
 }

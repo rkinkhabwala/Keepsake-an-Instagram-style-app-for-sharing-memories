@@ -74,6 +74,10 @@ public class User {
         updatedAt = Instant.now();
     }
 
+    public void setAvatarKey(String avatarKey) {
+        this.avatarKey = avatarKey;
+    }
+
     public void updateProfile(String displayName, String bio, boolean isPrivate) {
         this.displayName = displayName;
         this.bio = bio;

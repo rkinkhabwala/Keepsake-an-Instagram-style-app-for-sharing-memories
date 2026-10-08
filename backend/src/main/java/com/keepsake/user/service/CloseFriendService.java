@@ -15,10 +15,16 @@ public class CloseFriendService {
 
     private final CloseFriendRepository closeFriendRepository;
     private final UserService userService;
+    private final UserSummaries userSummaries;
 
-    public CloseFriendService(CloseFriendRepository closeFriendRepository, UserService userService) {
+    public CloseFriendService(
+            CloseFriendRepository closeFriendRepository,
+            UserService userService,
+            UserSummaries userSummaries
+    ) {
         this.closeFriendRepository = closeFriendRepository;
         this.userService = userService;
+        this.userSummaries = userSummaries;
     }
 
     @Transactional
@@ -44,7 +50,7 @@ public class CloseFriendService {
     public CursorPage<UserSummaryDto> list(UUID ownerId, CursorPageRequest page) {
         return CursorPage.fromLookahead(
                 closeFriendRepository.findFriends(ownerId, page.cursorOrMax(), page.lookaheadLimit())
-                        .stream().map(UserSummaryDto::from).toList(),
+                        .stream().map(userSummaries::of).toList(),
                 page.limit(), UserSummaryDto::id);
     }
 }

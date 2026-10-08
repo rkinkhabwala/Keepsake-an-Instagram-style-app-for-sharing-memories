@@ -8,8 +8,8 @@ import com.keepsake.memory.entity.Memory;
 import com.keepsake.memory.entity.MemoryMedia;
 import com.keepsake.memory.repository.MemoryMediaRepository;
 import com.keepsake.memory.repository.MemoryPersonRepository;
-import com.keepsake.user.dto.UserSummaryDto;
 import com.keepsake.user.entity.User;
+import com.keepsake.user.service.UserSummaries;
 import org.springframework.stereotype.Component;
 
 /** Builds memory DTOs. Callers must already have checked access through {@link MemoryAccessPolicy}. */
@@ -19,21 +19,24 @@ public class MemoryDtoAssembler {
     private final MemoryMediaRepository mediaRepository;
     private final MemoryPersonRepository personRepository;
     private final MediaStorage storage;
+    private final UserSummaries userSummaries;
 
     public MemoryDtoAssembler(
             MemoryMediaRepository mediaRepository,
             MemoryPersonRepository personRepository,
-            MediaStorage storage
+            MediaStorage storage,
+            UserSummaries userSummaries
     ) {
         this.mediaRepository = mediaRepository;
         this.personRepository = personRepository;
         this.storage = storage;
+        this.userSummaries = userSummaries;
     }
 
     public MemoryDto toDto(Memory memory, User author) {
         return new MemoryDto(
                 memory.getId(),
-                UserSummaryDto.from(author),
+                userSummaries.of(author),
                 memory.getCaption(),
                 memory.getOccurredOn(),
                 location(memory),
@@ -42,7 +45,7 @@ public class MemoryDtoAssembler {
                 memory.getLikeCount(),
                 memory.getCommentCount(),
                 mediaRepository.findByMemoryIdOrderByPosition(memory.getId()).stream().map(this::media).toList(),
-                personRepository.findTaggedUsers(memory.getId()).stream().map(UserSummaryDto::from).toList(),
+                personRepository.findTaggedUsers(memory.getId()).stream().map(userSummaries::of).toList(),
                 memory.getCreatedAt());
     }
 

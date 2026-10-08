@@ -22,10 +22,12 @@ public class FollowService {
 
     private final FollowRepository followRepository;
     private final UserService userService;
+    private final UserSummaries userSummaries;
 
-    public FollowService(FollowRepository followRepository, UserService userService) {
+    public FollowService(FollowRepository followRepository, UserService userService, UserSummaries userSummaries) {
         this.followRepository = followRepository;
         this.userService = userService;
+        this.userSummaries = userSummaries;
     }
 
     /** Following a private account creates a PENDING request; a public account is followed immediately. */
@@ -124,8 +126,8 @@ public class FollowService {
         return owner;
     }
 
-    private static CursorPage<UserSummaryDto> toPage(List<User> rows, CursorPageRequest page) {
-        return CursorPage.fromLookahead(rows.stream().map(UserSummaryDto::from).toList(),
+    private CursorPage<UserSummaryDto> toPage(List<User> rows, CursorPageRequest page) {
+        return CursorPage.fromLookahead(rows.stream().map(userSummaries::of).toList(),
                 page.limit(), UserSummaryDto::id);
     }
 }

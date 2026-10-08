@@ -3,12 +3,17 @@ package com.keepsake.user.service;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.error.UnauthenticatedException;
 import com.keepsake.common.pagination.InvalidRequestException;
+import com.keepsake.media.entity.MediaUploadStatus;
+import com.keepsake.media.repository.MediaUploadRepository;
+import com.keepsake.media.service.MediaUploadService;
 import com.keepsake.user.dto.MeDto;
 import com.keepsake.user.dto.UpdateProfileRequest;
 import com.keepsake.user.entity.User;
 import com.keepsake.user.repository.UserRepository;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,14 +21,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserSummaries userSummaries;
+    private final MediaUploadService uploadService;
+    private final MediaUploadRepository uploadRepository;
+    private final ApplicationEventPublisher events;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(
+            UserRepository userRepository,
+            UserSummaries userSummaries,
+            MediaUploadService uploadService,
+            MediaUploadRepository uploadRepository,
+            ApplicationEventPublisher events
+    ) {
         this.userRepository = userRepository;
+        this.userSummaries = userSummaries;
+        this.uploadService = uploadService;
+        this.uploadRepository = uploadRepository;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
     public MeDto me(UUID userId) {
-        return MeDto.from(requireCurrent(userId));
+        return userSummaries.me(requireCurrent(userId));
     }
 
     @Transactional
@@ -43,7 +62,20 @@ public class UserService {
         }
         boolean isPrivate = request.isPrivate() == null ? user.isPrivate() : request.isPrivate();
         user.updateProfile(displayName, bio, isPrivate);
-        return MeDto.from(userRepository.saveAndFlush(user));
+        if (request.avatarUploadId() != null) {
+            uploadService.claimForProcessing(userId, List.of(request.avatarUploadId()));
+            events.publishEvent(new AvatarSubmitted(userId, request.avatarUploadId()));
+        }
+        return userSummaries.me(userRepository.saveAndFlush(user));
+    }
+
+    /** Switches the avatar to a processed upload's square thumb, if the upload is the user's and READY. */
+    @Transactional
+    public void applyAvatar(UUID userId, UUID uploadId) {
+        userRepository.findById(userId).ifPresent(user -> uploadRepository.findById(uploadId)
+                .filter(upload -> upload.getOwnerId().equals(userId))
+                .filter(upload -> upload.getStatus() == MediaUploadStatus.READY)
+                .ifPresent(upload -> user.setAvatarKey(upload.getThumbKey())));
     }
 
     @Transactional(readOnly = true)

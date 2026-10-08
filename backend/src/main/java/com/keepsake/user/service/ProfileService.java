@@ -11,10 +11,12 @@ public class ProfileService {
 
     private final UserService userService;
     private final FollowService followService;
+    private final UserSummaries userSummaries;
 
-    public ProfileService(UserService userService, FollowService followService) {
+    public ProfileService(UserService userService, FollowService followService, UserSummaries userSummaries) {
         this.userService = userService;
         this.followService = followService;
+        this.userSummaries = userSummaries;
     }
 
     /** Profile header info is visible to every signed-in user, including for private accounts. */
@@ -26,6 +28,7 @@ public class ProfileService {
                 user.getUsername(),
                 user.getDisplayName(),
                 user.getBio(),
+                userSummaries.avatarUrl(user),
                 user.isPrivate(),
                 followService.followerCount(user.getId()),
                 followService.followingCount(user.getId()),

@@ -7,6 +7,7 @@ public record ProfileDto(
         String username,
         String displayName,
         String bio,
+        String avatarUrl,
         boolean isPrivate,
         long followerCount,
         long followingCount,
