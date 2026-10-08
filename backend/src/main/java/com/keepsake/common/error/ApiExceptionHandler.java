@@ -86,6 +86,15 @@ public class ApiExceptionHandler {
                 ProblemResponses.create(HttpStatus.UNAUTHORIZED, exception.getMessage(), request));
     }
 
+    @ExceptionHandler(NotFoundException.class)
+    ResponseEntity<ProblemDetail> handleNotFound(
+            NotFoundException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                ProblemResponses.create(HttpStatus.NOT_FOUND, exception.getMessage(), request));
+    }
+
     @ExceptionHandler(ConflictException.class)
     ResponseEntity<ProblemDetail> handleConflict(
             ConflictException exception,

@@ -74,6 +74,12 @@ public class User {
         updatedAt = Instant.now();
     }
 
+    public void updateProfile(String displayName, String bio, boolean isPrivate) {
+        this.displayName = displayName;
+        this.bio = bio;
+        this.isPrivate = isPrivate;
+    }
+
     public UUID getId() {
         return id;
     }
