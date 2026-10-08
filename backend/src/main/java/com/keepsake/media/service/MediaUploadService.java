@@ -115,6 +115,15 @@ public class MediaUploadService {
         return new UploadMetadataDto(exif.takenOn(), exif.latitude(), exif.longitude());
     }
 
+    /** The EXIF date taken of an uploaded original, if it can be read; never fails. */
+    public java.util.Optional<java.time.LocalDate> takenOn(MediaUpload upload) {
+        try {
+            return java.util.Optional.ofNullable(exifReader.read(processor.readOriginal(upload)).takenOn());
+        } catch (MediaProcessingException | RuntimeException exception) {
+            return java.util.Optional.empty();
+        }
+    }
+
     private static void validate(UploadUrlRequest item) {
         if (item == null || item.contentType() == null) {
             throw new InvalidRequestException("contentType is required");

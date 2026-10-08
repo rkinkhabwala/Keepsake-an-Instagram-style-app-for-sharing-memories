@@ -19,6 +19,10 @@ import org.springframework.stereotype.Component;
  *   <li>ONLY_ME: V == A</li>
  * </ul>
  * A PENDING follow request grants nothing.
+ *
+ * <p>Lists (feed, grid, tagged) only ever show memories passing {@link #canView}. Opening a single memory
+ * ({@link #canOpen}) additionally lets the author see their own PROCESSING or FAILED memory, so they can follow
+ * its progress and retry it.
  */
 @Component
 public class MemoryAccessPolicy {
@@ -44,6 +48,28 @@ public class MemoryAccessPolicy {
     /** Throws 404 rather than 403 so that a hidden memory's existence is not leaked. */
     public void requireVisible(UUID viewerId, MemoryAccessSubject memory) {
         if (!canView(viewerId, memory)) {
+            throw new NotFoundException("Memory not found");
+        }
+    }
+
+    /** Detail access: everything {@link #canView} allows, plus the author's own unfinished memories. */
+    public boolean canOpen(UUID viewerId, MemoryAccessSubject memory) {
+        if (memory.deleted()) {
+            return false;
+        }
+        return memory.authorId().equals(viewerId) || canView(viewerId, memory);
+    }
+
+    /** Throws 404 rather than 403 so that a hidden memory's existence is not leaked. */
+    public void requireOpenable(UUID viewerId, MemoryAccessSubject memory) {
+        if (!canOpen(viewerId, memory)) {
+            throw new NotFoundException("Memory not found");
+        }
+    }
+
+    /** Only the author may change or delete a memory; anyone else gets the same 404 as for a hidden memory. */
+    public void requireAuthor(UUID viewerId, MemoryAccessSubject memory) {
+        if (memory.deleted() || !memory.authorId().equals(viewerId)) {
             throw new NotFoundException("Memory not found");
         }
     }

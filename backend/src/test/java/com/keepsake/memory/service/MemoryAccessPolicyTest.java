@@ -148,6 +148,54 @@ class MemoryAccessPolicyTest {
                 .hasMessage("Memory not found");
     }
 
+    @ParameterizedTest
+    @EnumSource(MemoryStatus.class)
+    void authorCanOpenOwnMemoryInAnyStatusUnlessDeleted(MemoryStatus status) {
+        MemoryAccessPolicy policy = new MemoryAccessPolicy(mock(FollowService.class), mock(CloseFriendService.class));
+
+        assertThat(policy.canOpen(AUTHOR, memory(Visibility.ONLY_ME, PRIVATE_ACCOUNT, status, false))).isTrue();
+        assertThat(policy.canOpen(AUTHOR, memory(Visibility.ONLY_ME, PRIVATE_ACCOUNT, status, true))).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MemoryStatus.class, names = {"PROCESSING", "FAILED"})
+    void othersCannotOpenUnfinishedMemoriesEvenWithFullAccess(MemoryStatus status) {
+        FollowService followService = mock(FollowService.class);
+        CloseFriendService closeFriendService = mock(CloseFriendService.class);
+        when(followService.followStatus(VIEWER, AUTHOR)).thenReturn(Optional.of(FollowStatus.ACCEPTED));
+        when(closeFriendService.isCloseFriend(AUTHOR, VIEWER)).thenReturn(true);
+        MemoryAccessPolicy policy = new MemoryAccessPolicy(followService, closeFriendService);
+
+        assertThatThrownBy(() -> policy.requireOpenable(
+                VIEWER, memory(Visibility.PUBLIC, PUBLIC_ACCOUNT, status, false)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void openingReadyMemoryFollowsTheVisibilityTable() {
+        FollowService followService = mock(FollowService.class);
+        CloseFriendService closeFriendService = mock(CloseFriendService.class);
+        when(followService.followStatus(VIEWER, AUTHOR)).thenReturn(Optional.of(FollowStatus.PENDING));
+        MemoryAccessPolicy policy = new MemoryAccessPolicy(followService, closeFriendService);
+
+        assertThat(policy.canOpen(VIEWER, memory(Visibility.PUBLIC, PUBLIC_ACCOUNT, MemoryStatus.READY, false)))
+                .isTrue();
+        assertThat(policy.canOpen(VIEWER, memory(Visibility.PUBLIC, PRIVATE_ACCOUNT, MemoryStatus.READY, false)))
+                .isFalse();
+    }
+
+    @Test
+    void onlyTheAuthorPassesRequireAuthor() {
+        MemoryAccessPolicy policy = new MemoryAccessPolicy(mock(FollowService.class), mock(CloseFriendService.class));
+        MemoryAccessSubject readyPublic = memory(Visibility.PUBLIC, PUBLIC_ACCOUNT, MemoryStatus.READY, false);
+
+        policy.requireAuthor(AUTHOR, readyPublic);
+        assertThatThrownBy(() -> policy.requireAuthor(VIEWER, readyPublic)).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> policy.requireAuthor(
+                AUTHOR, memory(Visibility.PUBLIC, PUBLIC_ACCOUNT, MemoryStatus.READY, true)))
+                .isInstanceOf(NotFoundException.class);
+    }
+
     private static MemoryAccessSubject memory(
             Visibility visibility,
             boolean authorPrivate,
