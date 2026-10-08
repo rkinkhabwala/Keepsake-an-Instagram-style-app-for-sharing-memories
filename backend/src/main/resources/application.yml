@@ -47,3 +47,5 @@ keepsake:
     region: ${KEEPSAKE_S3_REGION:us-east-1}
   media:
     heif-decoder: ${KEEPSAKE_HEIF_DECODER:heif-dec}
+  seed:
+    enabled: ${KEEPSAKE_SEED_ENABLED:false}
