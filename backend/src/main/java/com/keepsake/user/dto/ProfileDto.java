@@ -9,6 +9,7 @@ public record ProfileDto(
         String bio,
         String avatarUrl,
         boolean isPrivate,
+        long memoryCount,
         long followerCount,
         long followingCount,
         Relationship relationship

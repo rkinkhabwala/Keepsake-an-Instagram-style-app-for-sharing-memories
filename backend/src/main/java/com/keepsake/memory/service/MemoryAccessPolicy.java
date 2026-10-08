@@ -27,6 +27,25 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryAccessPolicy {
 
+    /**
+     * The same rules as {@link #canView} expressed as a native SQL predicate, for list queries that must filter in
+     * the database. Requires the memory aliased {@code m}, its author (users) aliased {@code a}, and a
+     * {@code :viewerId} parameter. {@code MemoryAccessPolicySqlParityTest} checks it agrees with {@link #decide}
+     * for every combination of inputs; change both together.
+     */
+    public static final String VISIBLE_TO_VIEWER_SQL = """
+            (m.status = 'READY' AND m.deleted_at IS NULL AND (
+                m.author_id = :viewerId
+                OR (m.visibility = 'PUBLIC' AND (a.is_private = FALSE OR EXISTS (
+                    SELECT 1 FROM follows vf WHERE vf.follower_id = :viewerId
+                        AND vf.followee_id = m.author_id AND vf.status = 'ACCEPTED')))
+                OR (m.visibility = 'FOLLOWERS' AND EXISTS (
+                    SELECT 1 FROM follows vf WHERE vf.follower_id = :viewerId
+                        AND vf.followee_id = m.author_id AND vf.status = 'ACCEPTED'))
+                OR (m.visibility = 'CLOSE_FRIENDS' AND EXISTS (
+                    SELECT 1 FROM close_friends vc WHERE vc.owner_id = m.author_id AND vc.friend_id = :viewerId))))
+            """;
+
     private final FollowService followService;
     private final CloseFriendService closeFriendService;
 
