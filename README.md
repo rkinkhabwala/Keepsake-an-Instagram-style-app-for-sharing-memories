@@ -17,6 +17,7 @@ The API health endpoint is `/actuator/health`. PostgreSQL, Redis, and MinIO data
 
 - Backend: `cd backend && mvn verify`
 - Web client: `cd web && npm ci && npm test -- --run && npm run build`
+- End-to-end (Playwright, against the running stack): start it with `docker compose up -d --build --wait`, then `cd web && npx playwright install chromium && npm run e2e`. The tests create their own users and clear the stack's rate-limit counters in Redis before each flow; set `E2E_COMPOSE_PROJECT` if you started Compose with `-p`, and `E2E_BASE_URL` if the web client is not on <http://localhost:5173>.
 
 ## Configuration
 
