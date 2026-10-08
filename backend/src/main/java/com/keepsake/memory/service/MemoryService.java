@@ -114,7 +114,15 @@ public class MemoryService {
         Memory memory = memoryRepository.findById(memoryId).orElseThrow(MemoryService::notFound);
         User author = userService.requireById(memory.getAuthorId());
         accessPolicy.requireOpenable(viewerId, subject(memory, author));
-        return assembler.toDto(memory, author);
+        return assembler.toDtos(viewerId, List.of(memory)).getFirst();
+    }
+
+    /** For engagement: the memory, if the viewer may see it (READY and allowed by the policy), else 404. */
+    @Transactional(readOnly = true)
+    public Memory requireVisible(UUID viewerId, UUID memoryId) {
+        Memory memory = memoryRepository.findById(memoryId).orElseThrow(MemoryService::notFound);
+        accessPolicy.requireVisible(viewerId, subject(memory, userService.requireById(memory.getAuthorId())));
+        return memory;
     }
 
     @Transactional
@@ -142,7 +150,7 @@ public class MemoryService {
             tagged.forEach(userId -> personRepository.save(new MemoryPerson(memoryId, userId)));
         }
         memoryRepository.saveAndFlush(memory);
-        return assembler.toDto(memory, author);
+        return assembler.toDtos(viewerId, List.of(memory)).getFirst();
     }
 
     /** Soft delete: the memory disappears everywhere at once, while its rows remain for account deletion. */

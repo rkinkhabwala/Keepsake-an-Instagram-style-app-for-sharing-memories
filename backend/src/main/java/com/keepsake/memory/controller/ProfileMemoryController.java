@@ -30,4 +30,24 @@ public class ProfileMemoryController {
     ) {
         return memoryListService.grid(viewerId, username, CursorPageRequest.parse(cursor, limit));
     }
+
+    @GetMapping("/api/users/{username}/tagged")
+    public CursorPage<MemoryGridItemDto> tagged(
+            @AuthenticationPrincipal UUID viewerId,
+            @PathVariable String username,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return memoryListService.tagged(viewerId, username, CursorPageRequest.parse(cursor, limit));
+    }
+
+    /** The viewer's own saved memories; there is no way to list someone else's. */
+    @GetMapping("/api/saved")
+    public CursorPage<MemoryGridItemDto> saved(
+            @AuthenticationPrincipal UUID viewerId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return memoryListService.saved(viewerId, CursorPageRequest.parse(cursor, limit));
+    }
 }

@@ -41,7 +41,7 @@ public class MemoryListService {
         List<Memory> rows = memoryRepository.findFeed(
                 viewerId, position.createdAt(), position.id(), page.limit() + 1);
         CursorPage<Memory> memories = CursorPage.fromLookahead(rows, page.limit(), Memory::getId);
-        return new CursorPage<>(assembler.toDtos(memories.items()), memories.nextCursor());
+        return new CursorPage<>(assembler.toDtos(viewerId, memories.items()), memories.nextCursor());
     }
 
     @Transactional(readOnly = true)
@@ -50,6 +50,31 @@ public class MemoryListService {
         MemoryCursor.Position position = memoryCursor.resolve(page);
         List<Memory> rows = memoryRepository.findByAuthorVisibleTo(
                 author.getId(), viewerId, position.createdAt(), position.id(), page.limit() + 1);
+        CursorPage<Memory> memories = CursorPage.fromLookahead(rows, page.limit(), Memory::getId);
+        return new CursorPage<>(assembler.toGridItems(memories.items()), memories.nextCursor());
+    }
+
+    /** The "Tagged" profile tab: memories the user was tagged in, limited to those the viewer may see. */
+    @Transactional(readOnly = true)
+    public CursorPage<MemoryGridItemDto> tagged(UUID viewerId, String username, CursorPageRequest page) {
+        User tagged = userService.requireByUsername(username);
+        MemoryCursor.Position position = memoryCursor.resolve(page);
+        List<Memory> rows = memoryRepository.findTaggedVisibleTo(
+                tagged.getId(), viewerId, position.createdAt(), position.id(), page.limit() + 1);
+        CursorPage<Memory> memories = CursorPage.fromLookahead(rows, page.limit(), Memory::getId);
+        return new CursorPage<>(assembler.toGridItems(memories.items()), memories.nextCursor());
+    }
+
+    /** The viewer's own saved memories, most recently saved first, that they can still see. */
+    @Transactional(readOnly = true)
+    public CursorPage<MemoryGridItemDto> saved(UUID viewerId, CursorPageRequest page) {
+        MemoryCursor.Position position = page.cursor() == null
+                ? memoryCursor.resolve(page)
+                : memoryRepository.findSaveTime(viewerId, page.cursor())
+                        .map(savedAt -> new MemoryCursor.Position(savedAt, page.cursor()))
+                        .orElseThrow(com.keepsake.common.pagination.InvalidCursorException::new);
+        List<Memory> rows = memoryRepository.findSavedVisibleTo(
+                viewerId, position.createdAt(), position.id(), page.limit() + 1);
         CursorPage<Memory> memories = CursorPage.fromLookahead(rows, page.limit(), Memory::getId);
         return new CursorPage<>(assembler.toGridItems(memories.items()), memories.nextCursor());
     }
