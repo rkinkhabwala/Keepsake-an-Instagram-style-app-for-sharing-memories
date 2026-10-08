@@ -20,6 +20,9 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
 server:
   port: ${SERVER_PORT:8080}
+  # Use X-Forwarded-For from trusted internal proxies (the web container's nginx) as the client address, so
+  # per-IP rate limits apply per client rather than to the proxy.
+  forward-headers-strategy: native
 management:
   endpoints:
     web:
