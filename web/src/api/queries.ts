@@ -190,12 +190,20 @@ export function useAnswerFollowRequest() {
   });
 }
 
+/** Adds or removes a close friend, updating the list immediately and re-syncing with the server afterwards. */
 export function useCloseFriendToggle() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, add }: { userId: string; add: boolean }) =>
-      api<void>(`/api/close-friends/${userId}`, { method: add ? 'PUT' : 'DELETE' }),
-    onSuccess: () => client.invalidateQueries({ queryKey: keys.closeFriends }),
+    mutationFn: ({ user, add }: { user: UserSummary; add: boolean }) =>
+      api<void>(`/api/close-friends/${user.id}`, { method: add ? 'PUT' : 'DELETE' }),
+    onMutate: ({ user, add }) =>
+      client.setQueryData<InfiniteData<Page<UserSummary>>>(keys.closeFriends, (data) => {
+        if (!data) return data;
+        const pages = data.pages.map((page) => ({ ...page, items: page.items.filter((item) => item.id !== user.id) }));
+        if (add) pages[0] = { ...pages[0], items: [user, ...pages[0].items] };
+        return { ...data, pages };
+      }),
+    onSettled: () => client.invalidateQueries({ queryKey: keys.closeFriends }),
   });
 }
 

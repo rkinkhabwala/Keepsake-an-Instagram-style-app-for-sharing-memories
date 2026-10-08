@@ -35,6 +35,7 @@ function EditProfile({ me }: { me: Me }) {
   const [displayName, setDisplayName] = useState(me.displayName);
   const [bio, setBio] = useState(me.bio ?? '');
   const [avatarState, setAvatarState] = useState<string | null>(null);
+  const [isPrivate, setIsPrivate] = useState(me.isPrivate);
   const [saved, setSaved] = useState(false);
 
   const submit = (event: FormEvent) => {
@@ -87,9 +88,12 @@ function EditProfile({ me }: { me: Me }) {
       <label className="flex items-start gap-3 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
         <input
           type="checkbox"
-          checked={me.isPrivate}
-          disabled={update.isPending}
-          onChange={(event) => update.mutate({ isPrivate: event.target.checked })}
+          checked={isPrivate}
+          onChange={(event) => {
+            const next = event.target.checked;
+            setIsPrivate(next);
+            update.mutate({ isPrivate: next }, { onError: () => setIsPrivate(!next) });
+          }}
           className="mt-1 accent-emerald-700"
         />
         <span>
@@ -142,7 +146,10 @@ function CloseFriends({ username }: { username: string }) {
   const followers = useUserList(username, 'followers');
   const closeFriends = useCloseFriends();
   const toggle = useCloseFriendToggle();
+  // Local choices show immediately; the server's list takes over again once each change is saved.
+  const [pending, setPending] = useState<Record<string, boolean>>({});
   const current = new Set(closeFriends.data?.pages.flatMap((page) => page.items.map((user) => user.id)) ?? []);
+  const isCloseFriend = (id: string) => pending[id] ?? current.has(id);
   const people = followers.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <section className="space-y-3" aria-labelledby="close-friends-heading">
@@ -162,9 +169,18 @@ function CloseFriends({ username }: { username: string }) {
                 <input
                   type="checkbox"
                   aria-label={`Close friend: ${person.username}`}
-                  checked={current.has(person.id)}
-                  disabled={toggle.isPending}
-                  onChange={(event) => toggle.mutate({ userId: person.id, add: event.target.checked })}
+                  checked={isCloseFriend(person.id)}
+                  onChange={(event) => {
+                    const add = event.target.checked;
+                    setPending((choices) => ({ ...choices, [person.id]: add }));
+                    toggle.mutate(
+                      { user: person, add },
+                      {
+                        onSettled: () =>
+                          setPending(({ [person.id]: _settled, ...rest }) => rest),
+                      },
+                    );
+                  }}
                   className="h-4 w-4 accent-emerald-700"
                 />
               </label>
