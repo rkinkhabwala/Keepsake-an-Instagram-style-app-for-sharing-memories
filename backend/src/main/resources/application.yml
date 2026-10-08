@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: keepsake
+  mvc:
+    problemdetails:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/keepsake}
+    username: ${SPRING_DATASOURCE_USERNAME:keepsake}
+    password: ${SPRING_DATASOURCE_PASSWORD:keepsake-local}
+  flyway:
+    enabled: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+server:
+  port: ${SERVER_PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+logging:
+  structured:
+    format:
+      console: logstash
+keepsake:
+  web-origin: ${KEEPSAKE_WEB_ORIGIN:http://localhost:5173}
+  jwt-secret: ${KEEPSAKE_JWT_SECRET:local-development-secret-change-before-deploy-123456}
+  auth:
+    cookie-secure: ${KEEPSAKE_AUTH_COOKIE_SECURE:false}
