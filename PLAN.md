@@ -1,107 +1,94 @@
-# Keepsake Phase 2 implementation plan
+# Keepsake Phase 3 implementation plan
 
-**Status (2026-10-09): built on branch `phase-2`, not yet merged.** All §12 Phase 2 acceptance criteria have passing tests:
-- On This Day across leap years: `OnThisDayTest` and `OnThisDayIntegrationTest`;
-- the map returns only memories the viewer may see: `MapIntegrationTest`;
-- an album collaborator can add their own memories, and album viewers see only memories they could see individually: `AlbumIntegrationTest` and the `album.spec.ts` Playwright flow.
+Phases 1 and 2 are complete and merged into `main` (their plans are in git history). This plan covers spec §12 Phase 3 only:
+- Kafka for media and fan-out events;
+- a fan-out-on-write feed with the celebrity hybrid;
+- Redis counters with periodic flush;
+- video via FFmpeg;
+- notifications over WebSocket;
+- Prometheus and Grafana;
+- a k6 load test.
 
-Latest checks: `mvn verify` 309 tests, `npm test` 51, Playwright 5/5 on a fresh seeded stack, feed p95 22.9 ms.
+Same working rules as before:
+- work on a `phase-3` branch, one feature at a time, each with its migration and tests;
+- `mvn verify`, `npm test`, and the Playwright suite pass before moving on;
+- small scoped commits;
+- ask before adding anything outside spec §2 (the open questions at the end list these).
 
-Phase 1 is complete and merged into `main` (its plan is in git history). This plan covers spec §12 Phase 2 only: block list, hashtags, search, On This Day, map, and albums. Nothing from Phase 3.
+## Phase 3 acceptance criteria (spec §12)
 
-Same working rules as Phase 1: one feature at a time on a `phase-2` branch, each with its Flyway migration and tests, `mvn verify` and `npm test` (and the Playwright suite) green before the next, small scoped commits.
-
-Dependencies: everything comes from spec §2, plus the approved `leaflet.markercluster` and the dev-only typings `@types/leaflet` and `@types/leaflet.markercluster`. Search uses plain Postgres B-tree indexes (no trigram, no PostGIS).
+1. A k6 test with 1,000 virtual users scrolling the feed sustains p95 < 300 ms on a dev laptop.
+2. Unfollowing someone removes their memories from your feed on the next request, even if already fanned out.
+3. Notifications arrive in the open browser within 2 s of the triggering action.
 
 ## Build order
 
-Block list comes first because it changes `MemoryAccessPolicy`, which every later list and endpoint relies on.
-
-1. **Block list.** Add `PUT /api/blocks/{userId}`, `DELETE /api/blocks/{userId}`, and `GET /api/blocks` (cursor-paginated); approved.
-   - **Policy:** blocking goes into `MemoryAccessPolicy`, both the Java `decide` and `VISIBLE_TO_VIEWER_SQL`. A block in *either direction* between viewer and author hides the memory regardless of visibility, follows, or close friends. The author still sees their own memories.
-   - **Blocking removes the relationship, and unblocking restores none of it:**
-     - follows in both directions;
-     - pending follow requests in both directions;
-     - close-friend entries both ways;
-     - tags between the two users;
-     - album collaboration between them (once albums exist, step 6 applies this too).
-   - **While a block exists:**
-     - neither user can follow the other;
-     - neither can comment on the other's memories (already covered by the policy, which turns the comment into a 404);
-     - neither can tag the other, and tagging is rejected as "Unknown user" so the block is not revealed;
-     - each one's profile returns 404 to the other;
-     - each one's comments are hidden from the other everywhere, including on third parties' memories and in feed-card comment previews;
-     - each is hidden from the other in search results, follower and following lists, and lists of who liked a memory.
-   - Phase 1 has no "who liked this" list, only a count. Likes lists don't exist yet, so that rule has nothing to apply to; if a likers list is added later, it must filter blocked users.
-2. **Hashtags.** Parse `#tags` from captions on create and edit (letters, numbers and `_`, up to 100 characters, lowercased, NFC-normalized), and store them in `hashtags` and `memory_hashtags`. Add `GET /api/hashtags/{tag}/memories`, a grid filtered by the policy's SQL and paged by memory id. The web client turns `#tags` into links to that page.
-3. **Search.** `GET /api/search?q=` returns users matched by prefix on username or display name, plus hashtags matched by prefix, up to 20 of each.
-   - Matching uses B-tree `text_pattern_ops` indexes on lowercased columns.
-   - Users in a block relationship with the viewer are excluded.
-   - The query is trimmed, a leading `@` or `#` is stripped, and LIKE wildcards are escaped.
-   - Display-name matching is a prefix of the whole name, which is what a plain index supports.
-4. **On This Day.** `GET /api/resurface/on-this-day?date=YYYY-MM-DD` returns the viewer's own memories and the ones they're tagged in whose `occurred_on` has the same month and day as `date` in an earlier year, grouped by year, newest year first.
-   - Tagged memories must also pass the policy: being tagged doesn't grant access.
-   - `date` is the viewer's local date and defaults to today in UTC. Any date is safe to accept, since only the viewer's own visible memories can come back.
-   - Leap-year rule: on Feb 28 of a *non-leap* year, memories from Feb 29 also appear. In a leap year they appear only on Feb 29.
-   - The date matching lives in a small pure function, unit-tested across leap and non-leap years.
-5. **Map.** `GET /api/memories/map?bbox=minLng,minLat,maxLng,maxLat` returns memories with coordinates inside the box, filtered by the policy's SQL and capped at 500, newest first.
-   - A box that crosses the antimeridian (`minLng > maxLng`) is handled.
-   - The bbox is validated.
-   - A partial B-tree index covers `(lat, lng)` where both are set.
-   - Scope (decided): only the viewer's own memories, memories of accounts they follow (ACCEPTED), and memories they're tagged in, all still filtered by the policy's SQL.
-6. **Albums.** Endpoints from §8: `POST /api/albums`, `GET`/`PATCH`/`DELETE /api/albums/{id}`, `POST /api/albums/{id}/memories`, `DELETE /api/albums/{id}/memories/{memoryId}`, `POST /api/albums/{id}/collaborators`. Plus two §8 doesn't list but the screens need: `DELETE /api/albums/{id}/collaborators/{userId}`, and `GET /api/users/{username}/albums` for the profile's Albums tab (§9).
-   - **Who can see an album:** an album has a visibility (same four values) relative to its owner. Collaborators can always see it. The album-level rule reuses the policy's visibility function (generalized to "owned content with a visibility") and is not re-derived.
-   - **What viewers see inside:** each memory in an album is filtered individually through `MemoryAccessPolicy` for the viewer (§12 acceptance). The cover is shown only if the viewer may see that memory; otherwise the first visible memory is used.
-   - **Adding and removing:** the owner and EDITOR collaborators can add only memories they authored. The owner can remove anything, and an editor can remove what they added. VIEWER collaborators can see the album but not change it.
-   - **Collaborators:** the owner adds people who follow them (ACCEPTED), directly with no invite step. A collaborator can leave an album with `DELETE /api/albums/{id}/collaborators/me`, and the album page has a "Leave album" action.
-   - **Blocked users:** they can't be added as collaborators, and blocking ends any existing collaboration between the two users in either direction.
-7. **Web screens 7–9 and Phase 2 UI.**
-   - On This Day ("1 year ago", "3 years ago" sections).
-   - Map: plain Leaflet API plus `leaflet.markercluster`, OSM tiles, clustered thumbnail markers, refetching the bbox on pan and zoom. It uses no `react-leaflet`, which isn't in §2.
-   - Album page (cover, title, grid, collaborators), with create and edit and "Add to album" from a memory.
-   - An Albums tab on profiles.
-   - Header search with user and hashtag results, and a hashtag page.
-   - Block and unblock from a profile menu, and a blocked-accounts list in Settings.
-   - Vitest coverage for each.
-8. **Seed data.**
-   - Give about a third of the demo memories coordinates and hashtags.
-   - Add a Feb 29 memory (for the leap-year rule).
-   - Add a shared album: `ana` owns it, `ben` is an EDITOR, and it contains memories of mixed visibility.
-   - Add one block between two demo users.
-   - Seeding stays idempotent.
-9. **Verification.**
-   - Integration tests for each §12 Phase 2 criterion.
-   - Re-run `mvn verify`, `npm test`, and the three Phase 1 Playwright flows.
-   - Add one Playwright flow for the album collaborator case, since it crosses users and screens.
-   - Check that feed p95 is still under 200 ms with the block checks in the policy.
+1. **Observability first, so later steps can be measured.** This also closes a Phase 1 gap: spec §11 asks for `/actuator/prometheus`, but the Prometheus registry was never added, so the endpoint doesn't exist today.
+   - Add the registry and permit the endpoint (bound to localhost).
+   - Add timers for `/api/feed`, media processing time, and queue lag.
+   - Add Prometheus and Grafana to Compose, with a provisioned dashboard for feed p95, processing time, and queue lag (§11).
+2. **Kafka and a transactional outbox.**
+   - Add a single-node Kafka (KRaft) to Compose.
+   - Events are written to an `outbox_events` table in the same transaction as the change. A relay publishes them to Kafka, then marks them sent. Nothing is lost if the app stops between commit and publish, which replaces today's after-commit `@Async` handoff.
+   - Topics:
+     - `media.process`, keyed by memory, replacing the `@Async` processor with a consumer group;
+     - `memory.events` (READY, deleted, visibility changed);
+     - `social.events` (follow, unfollow, block, like, comment, tag).
+   - A retry topic and a dead-letter topic handle poison messages. The existing stuck-PROCESSING sweep stays as a safety net.
+3. **Video (FFmpeg, §6):**
+   - accept MP4 and MOV up to 100 MB and 60 s;
+   - verify with `ffprobe` (container, duration, real video stream);
+   - make a poster frame (EXIF-free, with blurhash) and a 720p H.264 transcode with metadata stripped;
+   - `memory_media.type = VIDEO` with `duration_ms`.
+   FFmpeg is installed in the backend image, as `heif-dec` was. The client uploads and plays videos (`<video>` with poster, muted autoplay in the feed). Test fixtures are generated with FFmpeg during the test run, not committed.
+4. **Redis counters with periodic flush (§7).**
+   - Likes and comments increment Redis counters, and a scheduled job flushes deltas to `like_count` and `comment_count` every few seconds.
+   - Reads use Redis, falling back to the database columns on a miss.
+   - The `likes` and `comments` rows stay the source of truth, so a lost delta can be recomputed.
+5. **Fan-out-on-write feed with celebrity hybrid (§7).**
+   - **Write:** on READY, the memory id goes into each eligible follower's Redis sorted set `feed:{userId}` (score = time, capped at 800). Eligibility is pre-filtered by visibility: followers; close friends only for CLOSE_FRIENDS; nobody for ONLY_ME. Authors with more than 10k followers are not fanned out; their memories are merged in at read time.
+   - **Read:**
+     - take a page from the sorted set, plus followed celebrities' memories from the database;
+     - re-check every candidate in one batch through `MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL` and the feed scope (author is the viewer, or an ACCEPTED follow exists now).
+     So unfollows, close-friend removals, visibility edits, deletions, and blocks are respected even for entries already fanned out (acceptance 2).
+   - **Optimizations, not needed for correctness:** unfollow and block also remove entries eagerly. Following someone backfills their recent memories.
+   - **Cold start:** a missing feed set is rebuilt from the Phase 1 fan-out-on-read query. That query also stays as the test oracle.
+6. **Notifications (Phase 3 §8):**
+   - **Data:** a `notifications` table with types LIKE, COMMENT, FOLLOW, FOLLOW_REQUEST, TAGGED and ON_THIS_DAY, plus `GET /api/notifications` and `POST /api/notifications/read`.
+   - **Flow:** notifications are produced from `social.events` and `memory.events` consumers. Recipients never get notifications about actors they're in a block with, or about memories they can't see (checked through the policy).
+   - **Live delivery:** over STOMP at `GET /ws` to `/user/queue/notifications`, authenticated with the access token on CONNECT.
+   - **Web:** a bell with an unread badge (§9 screen 10) and a notifications page.
+   - **Testing:** a Playwright test checks a like shows up in the other user's open browser within 2 s (acceptance 3).
+7. **k6 load test.**
+   - A load-test seed (opt-in and separate from the demo seed) creates enough users, follows (including a few >10k-follower "celebrities"), and memories to make the feed realistic.
+   - A test-only command mints access tokens to a file, because per-IP login limits stop 1,000 virtual users from logging in from one machine.
+   - The k6 script (run with the `grafana/k6` image) has each virtual user scroll several feed pages with think time.
+   - A threshold fails the run if p95 ≥ 300 ms (acceptance 1).
+   - I'll tune the Hikari pool, Tomcat threads, and Redis pipelining only as the measurements show the need.
+8. **Verification.**
+   - All suites and Playwright flows pass, including the new notification flow.
+   - The k6 run passes on this laptop.
+   - The Grafana dashboard shows the feed p95, processing-time, and queue-lag panels.
+   - A parity test checks the fan-out feed returns the same memories as the fan-out-on-read oracle across random follow, unfollow, visibility, close-friend, and block changes.
 
 ## Migrations
 
-- `V8__blocks.sql`: `blocks (blocker_id, blocked_id, created_at, updated_at)`, with PK, a check that blocker and blocked differ, and an index on `blocked_id`.
-- `V9__hashtags.sql`: `hashtags (id, tag UNIQUE, created_at, updated_at)` and `memory_hashtags (memory_id, hashtag_id)` with an index on `hashtag_id`.
-- `V10__search_indexes.sql`: `text_pattern_ops` indexes on `lower(username)`, `lower(display_name)`, and `hashtags.tag`.
-- `V11__map_index.sql`: partial index on `memories (lat, lng) WHERE lat IS NOT NULL AND deleted_at IS NULL`.
-- `V12__albums.sql`:
-  - `albums (id, owner_id, title ≤100, description ≤500, cover_memory_id ON DELETE SET NULL, visibility, timestamps)`;
-  - `album_memories (album_id, memory_id, position, added_by, timestamps; PK (album_id, memory_id))`;
-  - `album_collaborators (album_id, user_id, role EDITOR|VIEWER, timestamps)`;
-  - account deletion and memory deletion cascade correctly.
+- `V13__outbox.sql`: `outbox_events (id, topic, key, payload JSONB, created_at, published_at)` with an index on unpublished rows.
+- `V14__video_media.sql`: `memory_media.poster_key`, and upload limits by type.
+- `V15__notifications.sql`: `notifications (id, recipient_id, actor_id, type, memory_id, comment_id, read_at, created_at, updated_at)` with indexes on `(recipient_id, id DESC)` and unread.
+- More only if a step needs one; for example, a time zone on users, depending on question 2.
 
-## Tests per feature
+## Open questions (please answer with the go-ahead)
 
-- **Block list:**
-  - New rows in `MemoryAccessPolicyTest`'s visibility table for both directions (viewer blocked author, author blocked viewer). They cover every visibility on public and private accounts, and accepted follower, pending follower, and close-friend relations, to show the block overrides each one.
-  - The SQL parity test gains a block dimension (none, viewer→author, author→viewer), so the Java and SQL rules are compared across every combination.
-  - Integration tests: block removes follows, close friends, and tags; follow, comment, and tag attempts fail without revealing the block; profiles, lists, and comment threads hide the other user; the feed and grids filter both ways.
-- **Hashtags:** parsing unit tests (Unicode, case, duplicates, limits) and an integration test that the hashtag grid is visibility-filtered and updates on caption edits.
-- **Search:** prefix matching on username, display name, and hashtag; wildcard escaping; blocked users excluded; and a check that the query plan uses the indexes.
-- **On This Day:** unit tests for the date rule (a Feb 29, 2020 memory appears on Feb 28 in 2021, 2022, and 2023, and on Feb 29 in 2024, but not on Feb 28, 2024 or Mar 1, 2021), and integration tests for grouping, tagged memories through the policy, and excluding the current year.
-- **Map:** an integration test with mixed visibility and authors showing the endpoint returns only what the viewer may see; bbox edges, antimeridian, invalid bbox, and the cap.
-- **Albums:** an integration test that a collaborator can add their own memories; an album viewer sees only memories they could see individually (mixed visibility, private authors, blocks); the access matrix for owner, editor, viewer, and stranger; the cover-visibility fallback; and deletion cascades.
+1. **Dependencies and images outside spec §2:**
+   - `spring-kafka`, plus the Testcontainers Kafka module;
+   - `spring-boot-starter-websocket` (STOMP is named in §8 but not in §2);
+   - `micrometer-registry-prometheus` (needed for `/actuator/prometheus` in §11);
+   - for the browser, `@stomp/stompjs`, or I write a minimal STOMP client by hand (recommended: `@stomp/stompjs`);
+   - images: `apache/kafka` (KRaft), `prom/prometheus`, `grafana/grafana`, `grafana/k6`, and FFmpeg via apt in the backend image.
 
-## Decisions (2026-10-09)
-
-1. **Map scope:** own memories, memories of accounts the viewer follows, and memories they're tagged in, all filtered by `MemoryAccessPolicy`.
-2. **Album collaborators:** the owner adds followers directly with no invite step; collaborators can leave (endpoint and UI).
-3. **Typings:** `@types/leaflet` and `@types/leaflet.markercluster` are approved as dev dependencies.
-4. **Blocking:** the `/api/blocks` endpoints are approved. A block removes follows both ways, cancels pending requests, removes close-friends entries both ways, removes tags between the two, ends album collaboration between them, hides each other's comments everywhere, and hides each from the other in search and likes lists. Unblocking restores none of it. Each effect gets its own test.
+   Which are approved?
+2. **On This Day notifications.** These need a "morning" for each user. Recommended: store the browser's time zone on the user and send at 09:00 local time. The alternative is a fixed 09:00 UTC for everyone.
+3. **Like notifications.** One notification per like, or grouped ("Ana and 3 others liked your memory") per memory per hour? Recommended: grouped.
+4. **Load-test tokens.** Is a test-only token-minting command OK? It would be disabled unless a load-test profile is set. The alternative is k6 logging in through a raised rate limit in a dedicated load-test Compose profile.
+5. **Fan-out-on-read code.** Keep it as the cold-start rebuild and test oracle (recommended), or remove it once fan-out-on-write ships?
