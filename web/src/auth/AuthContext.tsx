@@ -24,6 +24,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** The browser's IANA time zone, so On This Day notifications arrive in the morning where the user is. */
+function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<Status>('loading');
@@ -62,8 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       user,
       login: async (identifier, password) =>
-        start(await api<AuthResponse>('/api/auth/login', { method: 'POST', body: { identifier, password } })),
-      signup: async (input) => start(await api<AuthResponse>('/api/auth/signup', { method: 'POST', body: input })),
+        start(
+          await api<AuthResponse>('/api/auth/login', {
+            method: 'POST',
+            body: { identifier, password, timeZone: browserTimeZone() },
+          }),
+        ),
+      signup: async (input) =>
+        start(await api<AuthResponse>('/api/auth/signup', { method: 'POST', body: { ...input, timeZone: browserTimeZone() } })),
       logout: async () => {
         try {
           await api<void>('/api/auth/logout', { method: 'POST' });

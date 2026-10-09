@@ -156,3 +156,18 @@ export interface UploadMetadata {
   latitude: number | null;
   longitude: number | null;
 }
+
+export type NotificationType = 'LIKE' | 'COMMENT' | 'FOLLOW' | 'FOLLOW_REQUEST' | 'TAGGED' | 'ON_THIS_DAY';
+
+/** For grouped likes, actor is the latest liker and othersCount how many others liked since the last read. */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  actor: UserSummary | null;
+  othersCount: number;
+  memoryId: string | null;
+  memoryThumbUrl: string | null;
+  commentPreview: string | null;
+  read: boolean;
+  at: string;
+}

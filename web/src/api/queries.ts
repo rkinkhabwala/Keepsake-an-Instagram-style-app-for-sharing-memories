@@ -10,6 +10,7 @@ import {
 import { api, withPage } from './client';
 import type {
   Album,
+  AppNotification,
   Comment,
   GridItem,
   MapMemory,
@@ -42,6 +43,8 @@ export const keys = {
   album: (id: string) => ['album', id] as const,
   albumMemories: (id: string) => ['album-memories', id] as const,
   albums: (username: string) => ['albums', username] as const,
+  notifications: ['notifications'] as const,
+  unreadNotifications: ['notifications', 'unread'] as const,
 };
 
 export type GridTab = 'memories' | 'tagged' | 'saved' | 'albums';
@@ -52,6 +55,26 @@ function infinitePage<T>(path: string, limit?: number) {
     queryFn: ({ pageParam }: { pageParam: string | null }) => api<Page<T>>(withPage(path, pageParam, limit)),
     getNextPageParam: (last: Page<T>) => last.nextCursor ?? undefined,
   };
+}
+
+export function useNotifications() {
+  return useInfiniteQuery({ queryKey: keys.notifications, ...infinitePage<AppNotification>('/api/notifications') });
+}
+
+export function useUnreadNotifications(enabled = true) {
+  return useQuery({
+    queryKey: keys.unreadNotifications,
+    queryFn: () => api<{ count: number }>('/api/notifications/unread-count'),
+    enabled,
+  });
+}
+
+export function useMarkNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>('/api/notifications/read', { method: 'POST' }),
+    onSuccess: () => queryClient.setQueryData(keys.unreadNotifications, { count: 0 }),
+  });
 }
 
 export function useMe() {

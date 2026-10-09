@@ -51,6 +51,7 @@ export const ME: AuthResponse = {
 export function signedIn(api: FakeApi) {
   api.on('POST', '/api/auth/refresh', ME);
   api.on('GET', '/api/users/me', { ...ME.user, avatarUrl: null });
+  api.on('GET', '/api/notifications/unread-count', { count: 0 });
 }
 
 export function renderApp(ui: ReactElement, { route = '/', path = '*' }: { route?: string; path?: string } = {}) {

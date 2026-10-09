@@ -12,6 +12,7 @@ import { MemoryDetailPage, NotFound } from './pages/MemoryDetailPage';
 import { OnThisDayPage } from './pages/OnThisDayPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SearchPage } from './pages/SearchPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UserListPage } from './pages/UserListPage';
 
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="tags/:tag" element={<HashtagPage />} />
           <Route path="albums/:id" element={<AlbumPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
