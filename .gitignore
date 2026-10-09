@@ -1,6 +1,6 @@
 .env
 .DS_Store
-**/target/
+**/target
 **/node_modules/
 web/dist/
 web/playwright-report/
