@@ -1,5 +1,6 @@
 package com.keepsake.user.service;
 
+import com.keepsake.feed.service.FeedStore;
 import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
 import com.keepsake.common.pagination.InvalidRequestException;
@@ -22,10 +23,18 @@ public class BlockService {
     private final UserService userService;
     private final UserSummaries userSummaries;
 
-    public BlockService(BlockRepository blockRepository, UserService userService, UserSummaries userSummaries) {
+    private final FeedStore feeds;
+
+    public BlockService(
+            BlockRepository blockRepository,
+            UserService userService,
+            UserSummaries userSummaries,
+            FeedStore feeds
+    ) {
         this.blockRepository = blockRepository;
         this.userService = userService;
         this.userSummaries = userSummaries;
+        this.feeds = feeds;
     }
 
     @Transactional
@@ -40,6 +49,7 @@ public class BlockService {
         blockRepository.deleteTagsBetween(blockerId, blockedId);
         blockRepository.deleteAlbumMemoriesAddedBetween(blockerId, blockedId);
         blockRepository.deleteAlbumCollaborationBetween(blockerId, blockedId);
+        feeds.invalidateAfterCommit(blockerId, blockedId);
     }
 
     /** Lifts the block only; follows, close friends, and tags removed by it stay removed. */

@@ -43,6 +43,9 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
             """)
     int deleteWithStatus(UUID followerId, UUID followeeId, FollowStatus status);
 
+    @Query("SELECT f.id.followerId FROM Follow f WHERE f.id.followeeId = :followeeId AND f.status = :status")
+    List<UUID> findFollowerIds(UUID followeeId, FollowStatus status);
+
     boolean existsByIdAndStatus(FollowId id, FollowStatus status);
 
     long countByIdFolloweeIdAndStatus(UUID followeeId, FollowStatus status);

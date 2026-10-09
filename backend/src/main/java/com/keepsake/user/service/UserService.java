@@ -1,5 +1,7 @@
 package com.keepsake.user.service;
 
+import com.keepsake.user.entity.FollowStatus;
+import com.keepsake.feed.service.FeedStore;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.error.UnauthenticatedException;
 import com.keepsake.common.pagination.InvalidRequestException;
@@ -30,6 +32,8 @@ public class UserService {
     private final FollowRepository followRepository;
     private final BlockRepository blockRepository;
 
+    private final FeedStore feeds;
+
     public UserService(
             UserRepository userRepository,
             UserSummaries userSummaries,
@@ -37,7 +41,8 @@ public class UserService {
             MediaUploadRepository uploadRepository,
             MediaJobs mediaJobs,
             FollowRepository followRepository,
-            BlockRepository blockRepository
+            BlockRepository blockRepository,
+            FeedStore feeds
     ) {
         this.userRepository = userRepository;
         this.userSummaries = userSummaries;
@@ -45,6 +50,7 @@ public class UserService {
         this.uploadRepository = uploadRepository;
         this.mediaJobs = mediaJobs;
         this.followRepository = followRepository;
+        this.feeds = feeds;
         this.blockRepository = blockRepository;
     }
 
@@ -71,6 +77,7 @@ public class UserService {
         boolean isPrivate = request.isPrivate() == null ? user.isPrivate() : request.isPrivate();
         if (user.isPrivate() && !isPrivate) {
             // Going public: anyone still waiting for approval becomes a follower, as they would by following now.
+            feeds.invalidateAfterCommit(followRepository.findFollowerIds(userId, FollowStatus.PENDING));
             followRepository.acceptAllPending(userId);
         }
         user.updateProfile(displayName, bio, isPrivate);

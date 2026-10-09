@@ -1,5 +1,6 @@
 package com.keepsake.user.service;
 
+import com.keepsake.feed.service.FeedStore;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
@@ -24,10 +25,18 @@ public class FollowService {
     private final UserService userService;
     private final UserSummaries userSummaries;
 
-    public FollowService(FollowRepository followRepository, UserService userService, UserSummaries userSummaries) {
+    private final FeedStore feeds;
+
+    public FollowService(
+            FollowRepository followRepository,
+            UserService userService,
+            UserSummaries userSummaries,
+            FeedStore feeds
+    ) {
         this.followRepository = followRepository;
         this.userService = userService;
         this.userSummaries = userSummaries;
+        this.feeds = feeds;
     }
 
     /** Following a private account creates a PENDING request; a public account is followed immediately. */
@@ -42,6 +51,7 @@ public class FollowService {
         if (!target.isPrivate()) {
             // A request left over from when the account was private no longer needs approval.
             followRepository.acceptPending(viewerId, target.getId());
+            feeds.invalidateAfterCommit(viewerId);
         }
         return relationship(viewerId, target.getId());
     }
@@ -51,6 +61,7 @@ public class FollowService {
     public void unfollow(UUID viewerId, String username) {
         User target = userService.requireByUsername(username);
         followRepository.deleteById(new FollowId(viewerId, target.getId()));
+        feeds.invalidateAfterCommit(viewerId);
     }
 
     @Transactional
@@ -58,6 +69,7 @@ public class FollowService {
         if (followRepository.acceptPending(requesterId, ownerId) == 0) {
             throw new NotFoundException("Follow request not found");
         }
+        feeds.invalidateAfterCommit(requesterId);
     }
 
     @Transactional

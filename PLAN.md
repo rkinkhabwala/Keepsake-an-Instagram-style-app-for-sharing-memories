@@ -53,6 +53,10 @@ Same working rules as before:
      So unfollows, close-friend removals, visibility edits, deletions, and blocks are respected even for entries already fanned out (acceptance 2).
    - **Optimizations, not needed for correctness:** unfollow and block also remove entries eagerly. Following someone backfills their recent memories.
    - **Cold start:** a missing feed set is rebuilt from the Phase 1 fan-out-on-read query. That query also stays as the test oracle.
+   - **As built:**
+     - Fan-out runs inside the transaction that marks the memory READY (itself a Kafka consumer), not through a separate Kafka topic. The memory is in feeds the moment it is READY, readers skip it until then, and a crash before commit redelivers the media job.
+     - Instead of removing or backfilling entries, follow, unfollow, block, close-friend, and going-public changes drop the affected feeds. The next read rebuilds them.
+     - The sorted set orders by member (UUIDv7 text) with score 0, which matches `ORDER BY id DESC` exactly.
 6. **Notifications (Phase 3 §8):**
    - **Data:** a `notifications` table with types LIKE, COMMENT, FOLLOW, FOLLOW_REQUEST, TAGGED and ON_THIS_DAY, plus `GET /api/notifications` and `POST /api/notifications/read`.
    - **Flow:** notifications are produced from `social.events` and `memory.events` consumers. Recipients never get notifications about actors they're in a block with, or about memories they can't see (checked through the policy).

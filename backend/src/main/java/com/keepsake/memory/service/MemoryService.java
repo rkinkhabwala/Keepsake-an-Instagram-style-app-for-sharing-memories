@@ -32,6 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import com.keepsake.feed.service.FeedFanOut;
 import com.keepsake.media.service.MediaJobs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +59,7 @@ public class MemoryService {
     private final Clock clock;
     private final TransactionTemplate transactions;
     private final HashtagService hashtagService;
+    private final FeedFanOut feedFanOut;
 
     public MemoryService(
             MemoryRepository memoryRepository,
@@ -71,7 +73,8 @@ public class MemoryService {
             MediaJobs mediaJobs,
             Clock clock,
             TransactionTemplate transactions,
-            HashtagService hashtagService
+            HashtagService hashtagService,
+            FeedFanOut feedFanOut
     ) {
         this.memoryRepository = memoryRepository;
         this.mediaRepository = mediaRepository;
@@ -85,6 +88,7 @@ public class MemoryService {
         this.clock = clock;
         this.transactions = transactions;
         this.hashtagService = hashtagService;
+        this.feedFanOut = feedFanOut;
     }
 
     /**
@@ -168,8 +172,12 @@ public class MemoryService {
         if (request.locationPresent()) {
             applyLocation(memory, location(request.location()));
         }
-        if (request.visibility() != null) {
+        if (request.visibility() != null && request.visibility() != memory.getVisibility()) {
             memory.setVisibility(request.visibility());
+            if (memory.getStatus() == MemoryStatus.READY) {
+                // A wider audience needs the memory in more feeds; a narrower one is enforced on read.
+                feedFanOut.fanOut(memory.getAuthorId(), memory.getVisibility(), memoryId);
+            }
         }
         if (request.taggedUsernames() != null) {
             Set<UUID> tagged = taggedUserIds(viewerId, request.taggedUsernames());
@@ -228,6 +236,11 @@ public class MemoryService {
             }
         }
         memory.setStatus(allReady && !media.isEmpty() ? MemoryStatus.READY : MemoryStatus.FAILED);
+        if (memory.getStatus() == MemoryStatus.READY) {
+            // Before commit, so the memory is in feeds as soon as it is READY. Readers skip it until then, and a
+            // crash before commit redelivers the media job, which completes and fans out again.
+            feedFanOut.fanOut(memory.getAuthorId(), memory.getVisibility(), memoryId);
+        }
     }
 
     /**

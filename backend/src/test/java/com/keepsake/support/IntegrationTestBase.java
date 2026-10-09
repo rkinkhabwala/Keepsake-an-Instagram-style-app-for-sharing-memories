@@ -59,5 +59,9 @@ public abstract class IntegrationTestBase {
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         // Tests that need counts flushed to Postgres call EngagementCounters.flush() themselves.
         registry.add("keepsake.counters.flush-interval", () -> "PT1H");
+        // Small enough that feeds fill up and celebrities exist in tests; tests refresh celebrities themselves.
+        registry.add("keepsake.feed.capacity", () -> "6");
+        registry.add("keepsake.feed.celebrity-threshold", () -> "4");
+        registry.add("keepsake.feed.celebrity-refresh", () -> "PT1H");
     }
 }
