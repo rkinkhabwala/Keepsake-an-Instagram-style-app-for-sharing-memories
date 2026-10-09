@@ -1,6 +1,6 @@
 # Keepsake Phase 1 implementation plan
 
-Implement one feature at a time, run `mvn verify` after each backend feature, and run `npm test` after the web client exists and after each later feature. Add only dependencies listed in `spec.md` §2, plus the HEIC-capable ImageIO dependency approved for this work. No Phase 2 or Phase 3 features.
+Implement one feature at a time, run `mvn verify` after each backend feature, and run `npm test` after the web client exists and after each later feature. Add only dependencies listed in `spec.md` §2, plus those approved for this work: `com.github.usefulness:webp-imageio` (WebP encoding) and libheif's `heif-dec` in the backend image (HEIC decoding). No Phase 2 or Phase 3 features.
 
 ## Build order
 

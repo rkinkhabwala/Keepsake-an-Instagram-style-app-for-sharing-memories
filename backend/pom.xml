@@ -96,6 +96,11 @@
             <version>2.19.0</version>
         </dependency>
         <dependency>
+            <groupId>com.github.usefulness</groupId>
+            <artifactId>webp-imageio</artifactId>
+            <version>0.10.0</version>
+        </dependency>
+        <dependency>
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-lettuce</artifactId>
             <version>8.14.0</version>
@@ -121,6 +126,11 @@
             <artifactId>testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>minio</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -128,6 +138,15 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Lets Mockito's Byte Buddy mock classes when tests run on a JDK newer than it officially
+                         supports (e.g. a local JDK 26); it has no effect on the target Java 21. -->
+                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keepsake.auth.controller.AuthController;
 import com.keepsake.auth.entity.RefreshToken;
 import com.keepsake.auth.repository.RefreshTokenRepository;
+import com.keepsake.auth.service.AuthService;
+import com.keepsake.support.IntegrationTestBase;
 import com.keepsake.user.entity.User;
 import com.keepsake.user.repository.UserRepository;
 import java.nio.charset.StandardCharsets;
@@ -20,34 +22,15 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Testcontainers
-class AuthIntegrationTest {
+class AuthIntegrationTest extends IntegrationTestBase {
 
     private static final String PASSWORD = "Keepsake-password-2026";
     private static final AtomicInteger NEXT_TEST_IP = new AtomicInteger(30);
-
-    @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @Container
-    static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
-            .withExposedPorts(6379);
 
     @Autowired
     MockMvc mockMvc;
@@ -61,14 +44,8 @@ class AuthIntegrationTest {
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
 
-    @DynamicPropertySource
-    static void configureServices(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.data.redis.host", REDIS::getHost);
-        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
-    }
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
     void signupHashesPasswordReturnsAccessTokenAndSetsHttpOnlyRefreshCookie() throws Exception {
@@ -114,6 +91,8 @@ class AuthIntegrationTest {
         assertThat(oldRecord.getRevokedAt()).isNotNull();
         assertThat(newRecord.getFamilyId()).isEqualTo(oldRecord.getFamilyId());
 
+        // Reuse after the grace window counts as theft.
+        ageRotation(oldRawToken, AuthService.REUSE_GRACE.plusSeconds(1));
         mockMvc.perform(post("/api/auth/refresh")
                         .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, oldRawToken)))
                 .andExpect(status().isUnauthorized())
@@ -121,6 +100,50 @@ class AuthIntegrationTest {
 
         List<RefreshToken> family = refreshTokenRepository.findAllByFamilyId(oldRecord.getFamilyId());
         assertThat(family).hasSize(2).allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
+    }
+
+    @Test
+    void reusingJustRotatedTokenWithinGraceReturnsTheSameNewSession() throws Exception {
+        String oldRawToken = cookieValue(signup("grace_user", "grace@example.test", "Grace"));
+        MvcResult firstTab = refresh(oldRawToken).andExpect(status().isOk()).andReturn();
+
+        // A second tab still holding the old cookie refreshes moments later.
+        ageRotation(oldRawToken, AuthService.REUSE_GRACE.minusSeconds(5));
+        MvcResult secondTab = refresh(oldRawToken).andExpect(status().isOk()).andReturn();
+
+        assertThat(cookieValue(secondTab)).isEqualTo(cookieValue(firstTab));
+        assertThat(json(secondTab).get("accessToken").asText()).isEqualTo(json(firstTab).get("accessToken").asText());
+        RefreshToken newest = refreshTokenRepository.findByTokenHash(hash(cookieValue(firstTab))).orElseThrow();
+        assertThat(newest.getRevokedAt()).isNull();
+        assertThat(refreshTokenRepository.findAllByFamilyId(newest.getFamilyId())).hasSize(2);
+        refresh(cookieValue(firstTab)).andExpect(status().isOk());
+    }
+
+    @Test
+    void graceDoesNotApplyAfterLogout() throws Exception {
+        String oldRawToken = cookieValue(signup("grace_logout", "grace_logout@example.test", "Grace"));
+        String newRawToken = cookieValue(refresh(oldRawToken).andExpect(status().isOk()).andReturn());
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, newRawToken)))
+                .andExpect(status().isNoContent());
+
+        refresh(oldRawToken).andExpect(status().isUnauthorized());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions refresh(String rawToken) throws Exception {
+        return mockMvc.perform(post("/api/auth/refresh")
+                .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, rawToken)));
+    }
+
+    /** Moves a rotated token's revocation into the past, as if {@code age} had elapsed since rotation. */
+    private void ageRotation(String rawToken, java.time.Duration age) throws Exception {
+        jdbc.update("UPDATE refresh_tokens SET revoked_at = NOW() - make_interval(secs => ?) WHERE token_hash = ?",
+                (double) age.toSeconds(), hash(rawToken));
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode json(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
     @Test
@@ -196,6 +219,39 @@ class AuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(signupJson("signuplimit4", "signuplimit4@example.test", "Signup limit")))
                 .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void spoofedForwardedForFromNonProxyIsIgnoredForRateLimiting() throws Exception {
+        // A client talking to the backend directly cannot pick a fresh address per attempt.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            badLogin(remoteAddress("198.51.100.40"), "203.0.113." + attempt).andExpect(status().isUnauthorized());
+        }
+        badLogin(remoteAddress("198.51.100.40"), "203.0.113.99").andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void forwardedForFromTrustedProxyIdentifiesEachClient() throws Exception {
+        // Behind the proxy, each real client gets its own limit...
+        for (int client = 0; client < 6; client++) {
+            badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100." + (60 + client)).andExpect(status().isUnauthorized());
+        }
+        // ...and one client cannot exceed it by going through the proxy.
+        for (int attempt = 0; attempt < 4; attempt++) {
+            badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100.60").andExpect(status().isUnauthorized());
+        }
+        badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100.60").andExpect(status().isTooManyRequests());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions badLogin(RequestPostProcessor from, String forwardedFor)
+            throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .with(from)
+                .header("X-Forwarded-For", forwardedFor)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"identifier":"nobody","password":"a-long-enough-password"}
+                        """));
     }
 
     @Test
