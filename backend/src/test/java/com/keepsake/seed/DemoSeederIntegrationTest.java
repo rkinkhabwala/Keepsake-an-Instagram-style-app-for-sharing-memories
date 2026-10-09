@@ -43,6 +43,7 @@ class DemoSeederIntegrationTest extends IntegrationTestBase {
     @Autowired com.keepsake.album.service.AlbumService albumService;
     @Autowired com.keepsake.user.service.BlockService blockService;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired com.keepsake.engagement.service.EngagementCounters counters;
 
     @Test
     void seedsUsersFollowsAndFiftyProcessedMemoriesOnce() {
@@ -50,6 +51,7 @@ class DemoSeederIntegrationTest extends IntegrationTestBase {
                 uploadRepository, storage, memoryService, memoryRepository, engagementService, albumService, blockService);
 
         seeder.seed();
+        counters.flush();
 
         List<User> users = userRepository.findAll().stream()
                 .filter(user -> USERNAMES.contains(user.getUsername())).toList();

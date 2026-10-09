@@ -11,7 +11,6 @@ import com.keepsake.engagement.repository.CommentRepository;
 import com.keepsake.engagement.repository.LikeRepository;
 import com.keepsake.engagement.repository.SaveRepository;
 import com.keepsake.memory.entity.Memory;
-import com.keepsake.memory.repository.MemoryRepository;
 import com.keepsake.memory.service.MemoryService;
 import java.time.Clock;
 import java.util.List;
@@ -31,7 +30,7 @@ public class EngagementService {
     private static final UUID MIN_UUID = new UUID(0L, 0L);
 
     private final MemoryService memoryService;
-    private final MemoryRepository memoryRepository;
+    private final EngagementCounters counters;
     private final LikeRepository likeRepository;
     private final SaveRepository saveRepository;
     private final CommentRepository commentRepository;
@@ -40,7 +39,7 @@ public class EngagementService {
 
     public EngagementService(
             MemoryService memoryService,
-            MemoryRepository memoryRepository,
+            EngagementCounters counters,
             LikeRepository likeRepository,
             SaveRepository saveRepository,
             CommentRepository commentRepository,
@@ -48,7 +47,7 @@ public class EngagementService {
             Clock clock
     ) {
         this.memoryService = memoryService;
-        this.memoryRepository = memoryRepository;
+        this.counters = counters;
         this.likeRepository = likeRepository;
         this.saveRepository = saveRepository;
         this.commentRepository = commentRepository;
@@ -61,7 +60,7 @@ public class EngagementService {
     public void like(UUID viewerId, UUID memoryId) {
         memoryService.requireVisible(viewerId, memoryId);
         if (likeRepository.insertIfAbsent(viewerId, memoryId) == 1) {
-            memoryRepository.adjustLikeCount(memoryId, 1);
+            counters.likeChanged(memoryId, 1);
         }
     }
 
@@ -69,7 +68,7 @@ public class EngagementService {
     public void unlike(UUID viewerId, UUID memoryId) {
         memoryService.requireVisible(viewerId, memoryId);
         if (likeRepository.deleteIfPresent(viewerId, memoryId) == 1) {
-            memoryRepository.adjustLikeCount(memoryId, -1);
+            counters.likeChanged(memoryId, -1);
         }
     }
 
@@ -114,7 +113,7 @@ public class EngagementService {
             }
         }
         Comment comment = commentRepository.saveAndFlush(new Comment(memoryId, viewerId, request.parentId(), body));
-        memoryRepository.adjustCommentCount(memoryId, 1);
+        counters.commentChanged(memoryId, 1);
         return commentAssembler.single(viewerId, memory.getAuthorId(), comment);
     }
 
@@ -134,7 +133,7 @@ public class EngagementService {
             throw new NotFoundException("Comment not found");
         }
         if (commentRepository.softDelete(commentId, clock.instant()) == 1) {
-            memoryRepository.adjustCommentCount(comment.getMemoryId(), -1);
+            counters.commentChanged(comment.getMemoryId(), -1);
         }
     }
 }

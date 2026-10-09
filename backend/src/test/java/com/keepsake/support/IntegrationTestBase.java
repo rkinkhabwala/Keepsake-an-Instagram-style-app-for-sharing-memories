@@ -57,5 +57,7 @@ public abstract class IntegrationTestBase {
         registry.add("keepsake.s3.secret-key", MINIO::getPassword);
         registry.add("keepsake.trusted-proxies", () -> TRUSTED_PROXY);
         registry.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
+        // Tests that need counts flushed to Postgres call EngagementCounters.flush() themselves.
+        registry.add("keepsake.counters.flush-interval", () -> "PT1H");
     }
 }

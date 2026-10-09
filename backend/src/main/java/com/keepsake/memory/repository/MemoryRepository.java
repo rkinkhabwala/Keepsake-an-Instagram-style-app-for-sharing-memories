@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 /**
@@ -80,16 +79,6 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
     @Query(value = "SELECT created_at FROM saves WHERE user_id = :userId AND memory_id = :memoryId",
             nativeQuery = true)
     Optional<Instant> findSaveTime(UUID userId, UUID memoryId);
-
-    @Modifying
-    @Query(value = "UPDATE memories SET like_count = GREATEST(like_count + :delta, 0) WHERE id = :memoryId",
-            nativeQuery = true)
-    void adjustLikeCount(UUID memoryId, int delta);
-
-    @Modifying
-    @Query(value = "UPDATE memories SET comment_count = GREATEST(comment_count + :delta, 0) WHERE id = :memoryId",
-            nativeQuery = true)
-    void adjustCommentCount(UUID memoryId, int delta);
 
     /**
      * Memories with coordinates inside a box, for the map: the viewer's own, those of accounts they follow
