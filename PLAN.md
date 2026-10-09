@@ -76,19 +76,20 @@ Same working rules as before:
 - `V13__outbox.sql`: `outbox_events (id, topic, key, payload JSONB, created_at, published_at)` with an index on unpublished rows.
 - `V14__video_media.sql`: `memory_media.poster_key`, and upload limits by type.
 - `V15__notifications.sql`: `notifications (id, recipient_id, actor_id, type, memory_id, comment_id, read_at, created_at, updated_at)` with indexes on `(recipient_id, id DESC)` and unread.
-- More only if a step needs one; for example, a time zone on users, depending on question 2.
+- `V16__user_time_zone.sql`: `users.time_zone` (IANA name, nullable; America/New_York when missing).
 
-## Open questions (please answer with the go-ahead)
+## Decisions (2026-10-09)
 
-1. **Dependencies and images outside spec §2:**
-   - `spring-kafka`, plus the Testcontainers Kafka module;
-   - `spring-boot-starter-websocket` (STOMP is named in §8 but not in §2);
-   - `micrometer-registry-prometheus` (needed for `/actuator/prometheus` in §11);
-   - for the browser, `@stomp/stompjs`, or I write a minimal STOMP client by hand (recommended: `@stomp/stompjs`);
-   - images: `apache/kafka` (KRaft), `prom/prometheus`, `grafana/grafana`, `grafana/k6`, and FFmpeg via apt in the backend image.
-
-   Which are approved?
-2. **On This Day notifications.** These need a "morning" for each user. Recommended: store the browser's time zone on the user and send at 09:00 local time. The alternative is a fixed 09:00 UTC for everyone.
-3. **Like notifications.** One notification per like, or grouped ("Ana and 3 others liked your memory") per memory per hour? Recommended: grouped.
-4. **Load-test tokens.** Is a test-only token-minting command OK? It would be disabled unless a load-test profile is set. The alternative is k6 logging in through a raised rate limit in a dedicated load-test Compose profile.
-5. **Fan-out-on-read code.** Keep it as the cold-start rebuild and test oracle (recommended), or remove it once fan-out-on-write ships?
+1. **Dependencies (all approved):**
+   - `spring-kafka` with `apache/kafka` in KRaft mode (no ZooKeeper), running in the default stack;
+   - `spring-boot-starter-websocket`;
+   - `micrometer-registry-prometheus`;
+   - `@stomp/stompjs`;
+   - `prom/prometheus` and `grafana/grafana`, behind a Compose profile named `observability` and documented in the README.
+2. **On This Day notifications** go out at 09:00 in each user's local time. The IANA time zone is captured from the browser at signup and login and stored on the user, falling back to `America/New_York` if missing (adds a `time_zone` column to users).
+3. **Like notifications** are grouped per memory ("ana and 4 others liked your memory"), updating the existing unread notification instead of adding new ones.
+4. **Load-test tokens:** a test-only command may mint them. It's enabled only under a `loadtest` profile and excluded from the default build, with a test proving it's unavailable without that profile.
+5. **The fan-out-on-read feed query stays:**
+   - as the fallback for accounts above the fan-out threshold;
+   - for rebuilding a cold Redis feed;
+   - as the reference in tests comparing it with the fan-out feed.
