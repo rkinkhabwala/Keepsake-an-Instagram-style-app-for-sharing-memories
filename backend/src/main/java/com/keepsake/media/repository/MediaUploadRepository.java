@@ -11,6 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface MediaUploadRepository extends JpaRepository<MediaUpload, UUID> {
 
+    List<MediaUpload> findAllByOwnerId(UUID ownerId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM MediaUpload u WHERE u.id IN :ids")
     List<MediaUpload> findAllByIdForUpdate(Collection<UUID> ids);

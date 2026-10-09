@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ApiError, api } from '../api/client';
 import {
   useAnswerFollowRequest,
   useCloseFriends,
@@ -26,6 +27,7 @@ export function SettingsPage() {
       <FollowRequests />
       <CloseFriends username={me.data.username} />
       <Button variant="secondary" onClick={() => logout()}>Log out</Button>
+      <DeleteAccount />
     </div>
   );
 }
@@ -137,6 +139,57 @@ function FollowRequests() {
         </ul>
       )}
       <ErrorNotice error={answer.error} />
+    </section>
+  );
+}
+
+/** Deletes the account and everything in it, after the user re-enters their password. */
+function DeleteAccount() {
+  const { forget } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    try {
+      await api<void>('/api/users/me', { method: 'DELETE', body: { password } });
+      forget();
+      navigate('/login', { replace: true });
+    } catch (failure) {
+      setError(failure instanceof ApiError && failure.status === 403 ? new Error('That password is not right.') : failure);
+      setPending(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3 rounded-xl border border-red-200 p-4 dark:border-red-900" aria-labelledby="delete-heading">
+      <h2 id="delete-heading" className="text-lg font-semibold text-red-700 dark:text-red-400">Delete account</h2>
+      <p className="text-sm text-stone-600 dark:text-stone-400">
+        Permanently deletes your memories and photos, likes, comments, saves, follows, close friends, and tags. This
+        cannot be undone.
+      </p>
+      {open ? (
+        <form onSubmit={submit} className="space-y-3">
+          <Field label="Enter your password to confirm">
+            <input type="password" autoComplete="current-password" required value={password}
+              onChange={(event) => setPassword(event.target.value)} className={inputClass} />
+          </Field>
+          <ErrorNotice error={error} />
+          <div className="flex gap-2">
+            <Button type="submit" variant="danger" disabled={pending || !password}>
+              {pending ? 'Deleting…' : 'Delete my account'}
+            </Button>
+            <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="danger" onClick={() => setOpen(true)}>Delete account…</Button>
+      )}
     </section>
   );
 }

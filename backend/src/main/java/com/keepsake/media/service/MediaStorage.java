@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /** Object storage access. The server never proxies uploads: clients PUT and GET through presigned URLs. */
@@ -68,6 +69,17 @@ public class MediaStorage {
     public byte[] readPrefix(String key, int length) {
         return s3Client.getObjectAsBytes(request -> request.bucket(bucket).key(key).range("bytes=0-" + (length - 1)))
                 .asByteArray();
+    }
+
+    /** Deletes the objects in batches; keys that do not exist are ignored. */
+    public void deleteAll(java.util.Collection<String> keys) {
+        java.util.List<String> all = java.util.List.copyOf(keys);
+        for (int start = 0; start < all.size(); start += 1000) {
+            java.util.List<ObjectIdentifier> batch = all.subList(start, Math.min(all.size(), start + 1000)).stream()
+                    .map(key -> ObjectIdentifier.builder().key(key).build())
+                    .toList();
+            s3Client.deleteObjects(request -> request.bucket(bucket).delete(delete -> delete.objects(batch).quiet(true)));
+        }
     }
 
     public void write(String key, byte[] bytes, String contentType) {

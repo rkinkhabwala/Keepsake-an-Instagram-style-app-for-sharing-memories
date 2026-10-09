@@ -88,16 +88,25 @@ public class AuthController {
     }
 
     private ResponseCookie refreshCookie(String value, Duration maxAge) {
+        return refreshCookie(value, maxAge, secureCookie);
+    }
+
+    /** Tells the browser to drop the refresh cookie, e.g. after the account is deleted. */
+    public static ResponseCookie expiredRefreshCookie(boolean secure) {
+        return refreshCookie("", Duration.ZERO, secure);
+    }
+
+    private static ResponseCookie refreshCookie(String value, Duration maxAge, boolean secure) {
         return ResponseCookie.from(REFRESH_COOKIE_NAME, value)
                 .httpOnly(true)
-                .secure(secureCookie)
+                .secure(secure)
                 .sameSite("Strict")
                 .path("/api/auth")
                 .maxAge(maxAge)
                 .build();
     }
 
-    private static String clientIp(HttpServletRequest request) {
+    public static String clientIp(HttpServletRequest request) {
         String remoteAddress = request.getRemoteAddr();
         return remoteAddress == null || remoteAddress.isBlank() ? "unknown" : remoteAddress;
     }

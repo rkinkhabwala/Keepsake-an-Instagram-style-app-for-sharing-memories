@@ -18,6 +18,8 @@ interface AuthContextValue {
   login: (identifier: string, password: string) => Promise<void>;
   signup: (input: SignupInput) => Promise<void>;
   logout: () => Promise<void>;
+  /** Forgets the session locally, e.g. after the account was deleted and the server has nothing to log out. */
+  forget: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -69,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           end();
         }
       },
+      forget: end,
     }),
     [status, user, start, end],
   );
