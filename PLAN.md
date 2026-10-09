@@ -1,5 +1,12 @@
 # Keepsake Phase 2 implementation plan
 
+**Status (2026-10-09): built on branch `phase-2`, not yet merged.** All §12 Phase 2 acceptance criteria have passing tests:
+- On This Day across leap years: `OnThisDayTest` and `OnThisDayIntegrationTest`;
+- the map returns only memories the viewer may see: `MapIntegrationTest`;
+- an album collaborator can add their own memories, and album viewers see only memories they could see individually: `AlbumIntegrationTest` and the `album.spec.ts` Playwright flow.
+
+Latest checks: `mvn verify` 309 tests, `npm test` 51, Playwright 5/5 on a fresh seeded stack, feed p95 22.9 ms.
+
 Phase 1 is complete and merged into `main` (its plan is in git history). This plan covers spec §12 Phase 2 only: block list, hashtags, search, On This Day, map, and albums. Nothing from Phase 3.
 
 Same working rules as Phase 1: one feature at a time on a `phase-2` branch, each with its Flyway migration and tests, `mvn verify` and `npm test` (and the Playwright suite) green before the next, small scoped commits.
