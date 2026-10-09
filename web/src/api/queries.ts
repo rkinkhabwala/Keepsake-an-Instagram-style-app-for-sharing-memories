@@ -32,6 +32,7 @@ export const keys = {
   closeFriends: ['close-friends'] as const,
   blocks: ['blocks'] as const,
   hashtag: (tag: string) => ['hashtag', tag] as const,
+  search: (query: string) => ['search', query] as const,
 };
 
 export type GridTab = 'memories' | 'tagged' | 'saved';
@@ -59,6 +60,15 @@ export function useFeed() {
 export function useGrid(username: string, tab: GridTab, enabled = true) {
   const path = tab === 'saved' ? '/api/saved' : `/api/users/${username}/${tab === 'memories' ? 'memories' : 'tagged'}`;
   return useInfiniteQuery({ queryKey: keys.grid(username, tab), enabled, ...infinitePage<GridItem>(path, 30) });
+}
+
+export function useSearch(query: string) {
+  return useQuery({
+    queryKey: keys.search(query),
+    queryFn: () => api<{ users: UserSummary[]; hashtags: string[] }>(`/api/search?q=${encodeURIComponent(query)}`),
+    enabled: query.length > 0,
+    staleTime: 10_000,
+  });
 }
 
 export function useHashtagGrid(tag: string) {

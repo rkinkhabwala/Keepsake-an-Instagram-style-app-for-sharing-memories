@@ -8,6 +8,7 @@ import { FeedPage } from './pages/FeedPage';
 import { HashtagPage } from './pages/HashtagPage';
 import { MemoryDetailPage, NotFound } from './pages/MemoryDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SearchPage } from './pages/SearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UserListPage } from './pages/UserListPage';
 
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="u/:username" element={<ProfilePage />} />
           <Route path="u/:username/followers" element={<UserListPage list="followers" />} />
           <Route path="u/:username/following" element={<UserListPage list="following" />} />
+          <Route path="search" element={<SearchPage />} />
           <Route path="tags/:tag" element={<HashtagPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
