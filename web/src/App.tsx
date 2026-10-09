@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { Layout } from './components/Layout';
@@ -12,6 +13,9 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SearchPage } from './pages/SearchPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UserListPage } from './pages/UserListPage';
+
+// Leaflet is large and only the map needs it, so the map page loads on demand.
+const MapPage = lazy(() => import('./pages/MapPage').then((module) => ({ default: module.MapPage })));
 
 function RequireAuth() {
   const { status } = useAuth();
@@ -45,6 +49,14 @@ export default function App() {
           <Route path="u/:username/following" element={<UserListPage list="following" />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="on-this-day" element={<OnThisDayPage />} />
+          <Route
+            path="map"
+            element={
+              <Suspense fallback={<Spinner label="Loading map" />}>
+                <MapPage />
+              </Suspense>
+            }
+          />
           <Route path="tags/:tag" element={<HashtagPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />

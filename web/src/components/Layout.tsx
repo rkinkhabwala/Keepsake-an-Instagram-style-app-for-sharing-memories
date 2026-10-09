@@ -17,6 +17,9 @@ export function Layout() {
       <NavLink to="/search" className={linkClass}>
         <span aria-hidden className="text-lg">⌕</span>Search
       </NavLink>
+      <NavLink to="/map" className={linkClass}>
+        <span aria-hidden className="text-lg">⌖</span>Map
+      </NavLink>
       <NavLink to="/new" className={linkClass}>
         <span aria-hidden className="text-lg">＋</span>New
       </NavLink>

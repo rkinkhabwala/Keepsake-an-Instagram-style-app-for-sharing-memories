@@ -1,5 +1,6 @@
 import {
   type InfiniteData,
+  keepPreviousData,
   type QueryClient,
   useInfiniteQuery,
   useMutation,
@@ -10,6 +11,7 @@ import { api, withPage } from './client';
 import type {
   Comment,
   GridItem,
+  MapMemory,
   Me,
   Memory,
   OnThisDay,
@@ -35,6 +37,7 @@ export const keys = {
   hashtag: (tag: string) => ['hashtag', tag] as const,
   search: (query: string) => ['search', query] as const,
   onThisDay: (date: string) => ['on-this-day', date] as const,
+  map: (bbox: string) => ['map', bbox] as const,
 };
 
 export type GridTab = 'memories' | 'tagged' | 'saved';
@@ -62,6 +65,16 @@ export function useFeed() {
 export function useGrid(username: string, tab: GridTab, enabled = true) {
   const path = tab === 'saved' ? '/api/saved' : `/api/users/${username}/${tab === 'memories' ? 'memories' : 'tagged'}`;
   return useInfiniteQuery({ queryKey: keys.grid(username, tab), enabled, ...infinitePage<GridItem>(path, 30) });
+}
+
+/** Map markers for a viewport; keeps showing the previous markers while the next box loads. */
+export function useMapMemories(bbox: string | null) {
+  return useQuery({
+    queryKey: keys.map(bbox ?? ''),
+    queryFn: () => api<{ items: MapMemory[]; truncated: boolean }>(`/api/memories/map?bbox=${encodeURIComponent(bbox!)}`),
+    enabled: bbox !== null,
+    placeholderData: keepPreviousData,
+  });
 }
 
 /** @param date the viewer's local date, so "today" follows their calendar rather than the server's */

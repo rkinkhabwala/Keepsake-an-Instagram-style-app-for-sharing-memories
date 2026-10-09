@@ -100,6 +100,17 @@ export interface GridItem {
   occurredOn: string;
 }
 
+export interface MapMemory {
+  id: string;
+  latitude: number;
+  longitude: number;
+  locationName: string | null;
+  occurredOn: string;
+  authorUsername: string;
+  thumbUrl: string | null;
+  blurhash: string | null;
+}
+
 export interface OnThisDayYear {
   year: number;
   yearsAgo: number;

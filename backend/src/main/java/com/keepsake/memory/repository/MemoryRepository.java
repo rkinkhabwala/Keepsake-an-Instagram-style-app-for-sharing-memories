@@ -91,6 +91,34 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
             nativeQuery = true)
     void adjustCommentCount(UUID memoryId, int delta);
 
+    /**
+     * Memories with coordinates inside a box, for the map: the viewer's own, those of accounts they follow
+     * (ACCEPTED), and those they are tagged in, all still filtered by the visibility rules. When
+     * {@code wrapsAntimeridian} the longitude range is {@code lng >= minLng OR lng <= maxLng}.
+     */
+    @Query(value = """
+            SELECT m.* FROM memories m JOIN users a ON a.id = m.author_id
+            WHERE m.lat IS NOT NULL AND m.deleted_at IS NULL
+              AND m.lat BETWEEN :minLat AND :maxLat
+              AND ((NOT :wrapsAntimeridian AND m.lng BETWEEN :minLng AND :maxLng)
+                OR (:wrapsAntimeridian AND (m.lng >= :minLng OR m.lng <= :maxLng)))
+              AND (m.author_id = :viewerId
+                OR m.author_id IN (SELECT f.followee_id FROM follows f
+                                   WHERE f.follower_id = :viewerId AND f.status = 'ACCEPTED')
+                OR EXISTS (SELECT 1 FROM memory_people p WHERE p.memory_id = m.id AND p.user_id = :viewerId))
+              AND """ + MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL + """
+            ORDER BY m.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Memory> findOnMap(
+            UUID viewerId,
+            double minLng,
+            double minLat,
+            double maxLng,
+            double maxLat,
+            boolean wrapsAntimeridian,
+            int limit);
+
     @Query(value = """
             SELECT COUNT(*) FROM memories m JOIN users a ON a.id = m.author_id
             WHERE m.author_id = :authorId AND """ + MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL,
