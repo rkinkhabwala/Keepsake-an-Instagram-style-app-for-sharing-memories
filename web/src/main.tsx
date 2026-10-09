@@ -5,7 +5,10 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ApiError } from './api/client';
 import { AuthProvider } from './auth/AuthContext';
+import { applyTheme, readThemeChoice } from './lib/theme';
 import './styles.css';
+
+applyTheme(readThemeChoice());
 
 const queryClient = new QueryClient({
   defaultOptions: {

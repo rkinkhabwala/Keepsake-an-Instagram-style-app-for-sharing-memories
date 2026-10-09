@@ -5,6 +5,7 @@ import { fakeApi, renderApp, signedIn } from '../test/utils';
 import { SettingsPage } from './SettingsPage';
 
 function settingsApi() {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   const api = fakeApi();
   signedIn(api);
   api.on('GET', /\/api\/follow-requests/, { items: [], nextCursor: null });

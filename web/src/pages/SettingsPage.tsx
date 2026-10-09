@@ -14,6 +14,7 @@ import type { Me } from '../api/types';
 import { MAX_IMAGE_BYTES, contentTypeOf, putFile, requestUploadSlots } from '../api/upload';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
+import { ThemePicker } from '../components/ThemePicker';
 import { Button, ErrorNotice, Field, Spinner, inputClass } from '../components/ui';
 
 export function SettingsPage() {
@@ -24,6 +25,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-[600px] space-y-10 px-4 py-6">
       <EditProfile me={me.data} />
+      <ThemePicker />
       <FollowRequests />
       <CloseFriends username={me.data.username} />
       <Button variant="secondary" onClick={() => logout()}>Log out</Button>
