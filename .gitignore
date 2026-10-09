@@ -6,3 +6,7 @@ web/dist/
 web/playwright-report/
 web/test-results/
 
+
+# macOS/iCloud sync-conflict copies such as "Foo 2.java"; never project files.
+* [0-9].*
+* [0-9]
