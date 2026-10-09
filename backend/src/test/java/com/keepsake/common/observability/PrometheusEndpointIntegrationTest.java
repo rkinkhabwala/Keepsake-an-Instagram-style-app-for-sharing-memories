@@ -11,14 +11,9 @@ import com.keepsake.support.TestApi;
 import com.keepsake.support.TestApi.TestUser;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.test.web.servlet.MockMvc;
 
-/**
- * Spec §11: /actuator/prometheus serves the metrics the Grafana dashboard is built on. Spring Boot tests turn
- * metrics export off by default, so this test turns it back on, as it is in the running app.
- */
-@AutoConfigureObservability(tracing = false)
+/** Spec §11: /actuator/prometheus serves the metrics the Grafana dashboard is built on. */
 class PrometheusEndpointIntegrationTest extends IntegrationTestBase {
 
     @Autowired MockMvc mockMvc;

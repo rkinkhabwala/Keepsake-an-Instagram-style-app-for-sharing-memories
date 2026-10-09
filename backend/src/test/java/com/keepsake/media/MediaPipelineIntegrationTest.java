@@ -34,7 +34,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
@@ -82,7 +81,7 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.longitude").value(org.hamcrest.Matchers.closeTo(-74.0060, 1e-4)));
 
         uploadService.claimForProcessing(owner.id(), List.of(uploadId));
-        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now()).get(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now())).isTrue();
 
         MediaUpload upload = uploadRepository.findById(uploadId).orElseThrow();
         assertThat(upload.getStatus()).isEqualTo(MediaUploadStatus.READY);
@@ -115,7 +114,7 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
         TestUser owner = signup("mp_small");
         UUID uploadId = uploadAndClaim(owner, "image/png", TestImages.png(200, 100));
 
-        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now()).get(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now())).isTrue();
 
         MediaUpload upload = uploadRepository.findById(uploadId).orElseThrow();
         assertThat(upload.getWidth()).isEqualTo(200);
@@ -130,7 +129,7 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
         TestUser owner = signup("mp_mismatch");
         UUID uploadId = uploadAndClaim(owner, "image/png", TestImages.jpeg(64, 64));
 
-        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now()).get(30, TimeUnit.SECONDS)).isFalse();
+        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now())).isFalse();
 
         MediaUpload upload = uploadRepository.findById(uploadId).orElseThrow();
         assertThat(upload.getStatus()).isEqualTo(MediaUploadStatus.FAILED);
@@ -144,7 +143,7 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
         byte[] html = "<html><script>alert(1)</script></html>".getBytes();
         UUID uploadId = uploadAndClaim(owner, "image/jpeg", html);
 
-        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now()).get(30, TimeUnit.SECONDS)).isFalse();
+        assertThat(processingService.processAll(List.of(uploadId), java.time.Instant.now())).isFalse();
         assertThat(uploadRepository.findById(uploadId).orElseThrow().getFailureReason())
                 .isEqualTo("File is not a supported image");
     }
@@ -157,7 +156,7 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
         UUID neverUploaded = UUID.fromString(slot.get("uploadId").asText());
         uploadService.claimForProcessing(owner.id(), List.of(neverUploaded));
 
-        assertThat(processingService.processAll(List.of(neverUploaded, good), java.time.Instant.now()).get(30, TimeUnit.SECONDS)).isFalse();
+        assertThat(processingService.processAll(List.of(neverUploaded, good), java.time.Instant.now())).isFalse();
 
         assertThat(uploadRepository.findById(good).orElseThrow().getStatus()).isEqualTo(MediaUploadStatus.READY);
         MediaUpload missing = uploadRepository.findById(neverUploaded).orElseThrow();

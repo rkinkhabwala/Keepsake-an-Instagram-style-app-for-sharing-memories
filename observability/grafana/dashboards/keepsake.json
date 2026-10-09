@@ -151,9 +151,22 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "short"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wait p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -173,8 +186,17 @@
         },
         {
           "refId": "B",
-          "expr": "sum(executor_queued_tasks{name=\"taskExecutor\"})",
-          "legendFormat": "queued tasks",
+          "expr": "sum(keepsake_outbox_pending)",
+          "legendFormat": "outbox not yet published",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "max by (client_id) (kafka_consumer_fetch_manager_records_lag_max)",
+          "legendFormat": "consumer lag {{client_id}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

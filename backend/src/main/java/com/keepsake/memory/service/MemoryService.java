@@ -32,7 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.context.ApplicationEventPublisher;
+import com.keepsake.media.service.MediaJobs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -54,7 +54,7 @@ public class MemoryService {
     private final UserService userService;
     private final MemoryAccessPolicy accessPolicy;
     private final MemoryDtoAssembler assembler;
-    private final ApplicationEventPublisher events;
+    private final MediaJobs mediaJobs;
     private final Clock clock;
     private final TransactionTemplate transactions;
     private final HashtagService hashtagService;
@@ -68,7 +68,7 @@ public class MemoryService {
             UserService userService,
             MemoryAccessPolicy accessPolicy,
             MemoryDtoAssembler assembler,
-            ApplicationEventPublisher events,
+            MediaJobs mediaJobs,
             Clock clock,
             TransactionTemplate transactions,
             HashtagService hashtagService
@@ -81,7 +81,7 @@ public class MemoryService {
         this.userService = userService;
         this.accessPolicy = accessPolicy;
         this.assembler = assembler;
-        this.events = events;
+        this.mediaJobs = mediaJobs;
         this.clock = clock;
         this.transactions = transactions;
         this.hashtagService = hashtagService;
@@ -132,7 +132,7 @@ public class MemoryService {
         }
         tagged.forEach(userId -> personRepository.save(new MemoryPerson(memory.getId(), userId)));
         hashtagService.indexCaption(memory.getId(), caption);
-        events.publishEvent(new MemoryMediaSubmitted(memory.getId(), uploadIds));
+        mediaJobs.submitMemory(memory.getId(), uploadIds);
         return new MemoryStatusDto(memory.getId(), memory.getStatus());
     }
 
@@ -203,7 +203,7 @@ public class MemoryService {
                 .filter(upload -> upload.getStatus() == MediaUploadStatus.FAILED)
                 .forEach(MediaUpload::markProcessing);
         memory.setStatus(MemoryStatus.PROCESSING);
-        events.publishEvent(new MemoryMediaSubmitted(memoryId, uploadIds));
+        mediaJobs.submitMemory(memoryId, uploadIds);
         return new MemoryStatusDto(memoryId, memory.getStatus());
     }
 

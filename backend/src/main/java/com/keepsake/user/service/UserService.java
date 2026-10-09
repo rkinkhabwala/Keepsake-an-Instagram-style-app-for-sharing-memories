@@ -15,7 +15,7 @@ import com.keepsake.user.repository.UserRepository;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import org.springframework.context.ApplicationEventPublisher;
+import com.keepsake.media.service.MediaJobs;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +26,7 @@ public class UserService {
     private final UserSummaries userSummaries;
     private final MediaUploadService uploadService;
     private final MediaUploadRepository uploadRepository;
-    private final ApplicationEventPublisher events;
+    private final MediaJobs mediaJobs;
     private final FollowRepository followRepository;
     private final BlockRepository blockRepository;
 
@@ -35,7 +35,7 @@ public class UserService {
             UserSummaries userSummaries,
             MediaUploadService uploadService,
             MediaUploadRepository uploadRepository,
-            ApplicationEventPublisher events,
+            MediaJobs mediaJobs,
             FollowRepository followRepository,
             BlockRepository blockRepository
     ) {
@@ -43,7 +43,7 @@ public class UserService {
         this.userSummaries = userSummaries;
         this.uploadService = uploadService;
         this.uploadRepository = uploadRepository;
-        this.events = events;
+        this.mediaJobs = mediaJobs;
         this.followRepository = followRepository;
         this.blockRepository = blockRepository;
     }
@@ -77,7 +77,7 @@ public class UserService {
         if (request.avatarUploadId() != null) {
             uploadService.claimForProcessing(userId, List.of(request.avatarUploadId()));
             user.requestAvatar(request.avatarUploadId());
-            events.publishEvent(new AvatarSubmitted(userId, request.avatarUploadId()));
+            mediaJobs.submitAvatar(userId, request.avatarUploadId());
         }
         return userSummaries.me(userRepository.saveAndFlush(user));
     }

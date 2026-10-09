@@ -7,11 +7,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-/** Runs processing off the request thread; the request id is carried over by the executor's MDC decorator. */
+/** Processes a job's uploads, recording how long the job waited in the queue (outbox plus Kafka). */
 @Service
 public class MediaProcessingService {
 
@@ -23,23 +21,23 @@ public class MediaProcessingService {
         this.processor = processor;
         this.clock = clock;
         this.queueWait = Timer.builder("keepsake.media.queue.wait")
-                .description("Time uploads wait between being submitted for processing and processing starting")
+                .description("Time between a media job being queued and its processing starting")
                 .register(meterRegistry);
     }
 
     /**
-     * Processes every upload even if an earlier one fails, so each records its own outcome.
+     * Processes every upload even if an earlier one fails, so each records its own outcome. Uploads already READY
+     * are skipped, so a redelivered job is harmless.
      *
-     * @param submittedAt when the work was handed to the queue, to measure queue wait (lag)
-     * @return completes with true only when all uploads are READY
+     * @param submittedAt when the job was queued, to measure queue wait (lag)
+     * @return true only when all uploads are READY
      */
-    @Async
-    public CompletableFuture<Boolean> processAll(List<UUID> uploadIds, Instant submittedAt) {
+    public boolean processAll(List<UUID> uploadIds, Instant submittedAt) {
         queueWait.record(Duration.between(submittedAt, clock.instant()));
         boolean allReady = true;
         for (UUID uploadId : uploadIds) {
             allReady &= processor.process(uploadId);
         }
-        return CompletableFuture.completedFuture(allReady);
+        return allReady;
     }
 }
