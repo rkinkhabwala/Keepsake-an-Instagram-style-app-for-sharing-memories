@@ -6,10 +6,10 @@ Keepsake is a local-first memory sharing app. The Phase 1 stack is a Java 21 / S
 
 1. Install Java 21, Maven, Node.js 22+, npm, and Docker Compose.
 2. Copy `.env.example` to `.env` and replace the local secrets if exposing services beyond your machine.
-3. From the repository root, run `docker compose up --build`.
-4. Open the web client at <http://localhost:5173> and MinIO Console at <http://localhost:9001>. The API is also reachable directly at <http://localhost:8080>, but only from this machine: Compose binds that port to 127.0.0.1.
+3. From the repository root, run `docker compose up --build`, or `SEED_DEMO=true docker compose up --build` to also create demo data.
+4. Open the web client at <http://localhost:5173> and MinIO Console at <http://localhost:9001>. The API is also reachable directly at <http://localhost:8080>. Compose binds the web client and the API to 127.0.0.1, so they are reachable only from this machine.
 
-On first start the backend seeds demo data in the background (about 30 seconds): five users, follows, close friends, and 50 memories with generated photos, likes, and comments. Log in as `ana`, `ben`, `cleo`, `dev`, or `eli`, all with the password `keepsake-demo`. `cleo` is a private account, and `ana` has a pending request to follow her. Seeding is skipped when the demo users already exist; set `SEED_DEMO_DATA=false` in `.env` to turn it off.
+Demo data is opt-in, because every demo account shares a published password. With `SEED_DEMO=true` (on the command line or in `.env`), the backend seeds in the background on first start (about 30 seconds): five users, follows, close friends, and 50 memories with generated photos, likes, and comments. Log in as `ana`, `ben`, `cleo`, `dev`, or `eli`, all with the password `keepsake-demo`. `cleo` is a private account, and `ana` has a pending request to follow her. Seeding is skipped when the demo users already exist.
 
 The API health endpoint is `/actuator/health`. PostgreSQL, Redis, and MinIO data are persisted in named Compose volumes.
 
