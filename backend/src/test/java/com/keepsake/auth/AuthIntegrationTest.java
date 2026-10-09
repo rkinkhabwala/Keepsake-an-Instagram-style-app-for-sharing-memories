@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keepsake.auth.controller.AuthController;
 import com.keepsake.auth.entity.RefreshToken;
 import com.keepsake.auth.repository.RefreshTokenRepository;
+import com.keepsake.auth.service.AuthService;
 import com.keepsake.support.IntegrationTestBase;
 import com.keepsake.user.entity.User;
 import com.keepsake.user.repository.UserRepository;
@@ -42,6 +43,9 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
     void signupHashesPasswordReturnsAccessTokenAndSetsHttpOnlyRefreshCookie() throws Exception {
@@ -87,6 +91,8 @@ class AuthIntegrationTest extends IntegrationTestBase {
         assertThat(oldRecord.getRevokedAt()).isNotNull();
         assertThat(newRecord.getFamilyId()).isEqualTo(oldRecord.getFamilyId());
 
+        // Reuse after the grace window counts as theft.
+        ageRotation(oldRawToken, AuthService.REUSE_GRACE.plusSeconds(1));
         mockMvc.perform(post("/api/auth/refresh")
                         .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, oldRawToken)))
                 .andExpect(status().isUnauthorized())
@@ -94,6 +100,50 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
         List<RefreshToken> family = refreshTokenRepository.findAllByFamilyId(oldRecord.getFamilyId());
         assertThat(family).hasSize(2).allSatisfy(token -> assertThat(token.getRevokedAt()).isNotNull());
+    }
+
+    @Test
+    void reusingJustRotatedTokenWithinGraceReturnsTheSameNewSession() throws Exception {
+        String oldRawToken = cookieValue(signup("grace_user", "grace@example.test", "Grace"));
+        MvcResult firstTab = refresh(oldRawToken).andExpect(status().isOk()).andReturn();
+
+        // A second tab still holding the old cookie refreshes moments later.
+        ageRotation(oldRawToken, AuthService.REUSE_GRACE.minusSeconds(5));
+        MvcResult secondTab = refresh(oldRawToken).andExpect(status().isOk()).andReturn();
+
+        assertThat(cookieValue(secondTab)).isEqualTo(cookieValue(firstTab));
+        assertThat(json(secondTab).get("accessToken").asText()).isEqualTo(json(firstTab).get("accessToken").asText());
+        RefreshToken newest = refreshTokenRepository.findByTokenHash(hash(cookieValue(firstTab))).orElseThrow();
+        assertThat(newest.getRevokedAt()).isNull();
+        assertThat(refreshTokenRepository.findAllByFamilyId(newest.getFamilyId())).hasSize(2);
+        refresh(cookieValue(firstTab)).andExpect(status().isOk());
+    }
+
+    @Test
+    void graceDoesNotApplyAfterLogout() throws Exception {
+        String oldRawToken = cookieValue(signup("grace_logout", "grace_logout@example.test", "Grace"));
+        String newRawToken = cookieValue(refresh(oldRawToken).andExpect(status().isOk()).andReturn());
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, newRawToken)))
+                .andExpect(status().isNoContent());
+
+        refresh(oldRawToken).andExpect(status().isUnauthorized());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions refresh(String rawToken) throws Exception {
+        return mockMvc.perform(post("/api/auth/refresh")
+                .cookie(new jakarta.servlet.http.Cookie(AuthController.REFRESH_COOKIE_NAME, rawToken)));
+    }
+
+    /** Moves a rotated token's revocation into the past, as if {@code age} had elapsed since rotation. */
+    private void ageRotation(String rawToken, java.time.Duration age) throws Exception {
+        jdbc.update("UPDATE refresh_tokens SET revoked_at = NOW() - make_interval(secs => ?) WHERE token_hash = ?",
+                (double) age.toSeconds(), hash(rawToken));
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode json(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
     @Test

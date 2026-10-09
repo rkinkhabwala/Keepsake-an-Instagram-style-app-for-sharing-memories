@@ -31,6 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     public static final Duration REFRESH_TOKEN_LIFETIME = Duration.ofDays(14);
+    /**
+     * A just-rotated refresh token presented again within this window (two tabs refreshing at once) gets the same
+     * new session back instead of triggering reuse detection. Later reuse still revokes the whole family.
+     */
+    public static final Duration REUSE_GRACE = Duration.ofSeconds(30);
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int REFRESH_TOKEN_BYTES = 32;
 
@@ -39,6 +44,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final Clock clock;
+    private final SessionSealer sessionSealer;
     private final String dummyPasswordHash;
 
     public AuthService(
@@ -46,13 +52,15 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            Clock clock
+            Clock clock,
+            SessionSealer sessionSealer
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.clock = clock;
+        this.sessionSealer = sessionSealer;
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
@@ -103,6 +111,10 @@ public class AuthService {
 
         RefreshToken token = storedToken.get();
         if (token.getRevokedAt() != null) {
+            Optional<AuthSession> concurrentRotation = sessionWithinGrace(token, now);
+            if (concurrentRotation.isPresent()) {
+                return concurrentRotation;
+            }
             refreshTokenRepository.revokeActiveFamily(token.getFamilyId(), now);
             return Optional.empty();
         }
@@ -117,8 +129,32 @@ public class AuthService {
             return Optional.empty();
         }
 
-        token.revoke(now);
-        return Optional.of(newSession(user.get(), token.getFamilyId()));
+        IssuedSession successor = issue(user.get(), token.getFamilyId());
+        token.rotateTo(successor.tokenId(), sessionSealer.seal(successor.session()), now);
+        return Optional.of(successor.session());
+    }
+
+    /**
+     * The session a token was rotated into, if it was rotated (not logged out) under {@link #REUSE_GRACE} ago and
+     * that successor is still live. Requests are serialised by the row lock taken in rotateRefreshToken.
+     */
+    private Optional<AuthSession> sessionWithinGrace(RefreshToken token, Instant now) {
+        if (token.getSuccessorId() == null || token.getSuccessorSession() == null
+                || !token.getRevokedAt().plus(REUSE_GRACE).isAfter(now)) {
+            return Optional.empty();
+        }
+        boolean successorLive = refreshTokenRepository.findById(token.getSuccessorId())
+                .filter(successor -> successor.getRevokedAt() == null)
+                .filter(successor -> successor.getExpiresAt().isAfter(now))
+                .isPresent();
+        if (!successorLive) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(sessionSealer.open(token.getSuccessorSession()));
+        } catch (IllegalArgumentException unreadable) {
+            return Optional.empty();
+        }
     }
 
     @Transactional
@@ -130,21 +166,28 @@ public class AuthService {
                 .ifPresent(token -> refreshTokenRepository.revokeActiveFamily(token.getFamilyId(), clock.instant()));
     }
 
+    private record IssuedSession(UUID tokenId, AuthSession session) {
+    }
+
     private AuthSession newSession(User user, UUID familyId) {
+        return issue(user, familyId).session();
+    }
+
+    private IssuedSession issue(User user, UUID familyId) {
         String rawRefreshToken = newRefreshToken();
         Instant now = clock.instant();
-        refreshTokenRepository.save(new RefreshToken(
+        RefreshToken stored = refreshTokenRepository.save(new RefreshToken(
                 user.getId(),
                 hashToken(rawRefreshToken),
                 familyId,
                 now.plus(REFRESH_TOKEN_LIFETIME)));
-        return new AuthSession(
+        return new IssuedSession(stored.getId(), new AuthSession(
                 new AuthResponse(
                         jwtService.createAccessToken(user.getId()),
                         "Bearer",
                         JwtService.ACCESS_TOKEN_LIFETIME.toSeconds(),
                         AuthUserDto.from(user)),
-                rawRefreshToken);
+                rawRefreshToken));
     }
 
     private static String newRefreshToken() {

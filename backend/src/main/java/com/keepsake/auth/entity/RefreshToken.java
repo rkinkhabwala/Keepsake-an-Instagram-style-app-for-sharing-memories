@@ -34,6 +34,12 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "successor_id")
+    private UUID successorId;
+
+    @Column(name = "successor_session")
+    private String successorSession;
+
     protected RefreshToken() {
     }
 
@@ -76,6 +82,21 @@ public class RefreshToken {
 
     public Instant getRevokedAt() {
         return revokedAt;
+    }
+
+    /** Revokes this token because it was exchanged for {@code successorId}, keeping that session sealed. */
+    public void rotateTo(UUID successorId, String sealedSession, Instant at) {
+        revoke(at);
+        this.successorId = successorId;
+        this.successorSession = sealedSession;
+    }
+
+    public UUID getSuccessorId() {
+        return successorId;
+    }
+
+    public String getSuccessorSession() {
+        return successorSession;
     }
 
     public void revoke(Instant at) {
