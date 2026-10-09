@@ -114,7 +114,8 @@ public class MemoryDtoAssembler {
                     cover == null || !cover.isReady() ? null : storage.presignDownload(cover.getThumbKey()).toString(),
                     cover == null ? null : cover.getBlurhash(),
                     items.size(),
-                    memory.getOccurredOn());
+                    memory.getOccurredOn(),
+                    cover != null && cover.getType() == com.keepsake.memory.entity.MediaType.VIDEO);
         }).toList();
     }
 
@@ -147,7 +148,10 @@ public class MemoryDtoAssembler {
                 media.isReady() ? storage.presignDownload(media.getThumbKey()).toString() : null,
                 media.getWidth(),
                 media.getHeight(),
-                media.getBlurhash());
+                media.getBlurhash(),
+                media.isReady() && media.getPosterKey() != null
+                        ? storage.presignDownload(media.getPosterKey()).toString() : null,
+                media.getDurationMs());
     }
 
     static LocationDto location(Memory memory) {

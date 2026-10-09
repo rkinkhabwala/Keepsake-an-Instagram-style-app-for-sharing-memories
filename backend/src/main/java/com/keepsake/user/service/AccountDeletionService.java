@@ -80,6 +80,6 @@ public class AccountDeletionService {
     }
 
     private static Stream<String> storageKeys(MediaUpload upload) {
-        return Stream.of(upload.getOriginalKey(), upload.displayKeyFor(), upload.thumbKeyFor());
+        return Stream.of(upload.getOriginalKey(), upload.displayKeyFor(), upload.thumbKeyFor(), upload.videoKeyFor());
     }
 }

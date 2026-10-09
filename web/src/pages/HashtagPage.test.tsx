@@ -10,7 +10,7 @@ describe('HashtagPage', () => {
     const api = fakeApi();
     signedIn(api);
     api.on('GET', /\/api\/hashtags\/summer\/memories/, {
-      items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-07-01' }],
+      items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-07-01', video: false }],
       nextCursor: null,
     });
     renderApp(<HashtagPage />, { route: '/tags/summer', path: '/tags/:tag' });

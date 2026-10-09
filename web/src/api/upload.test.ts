@@ -19,3 +19,15 @@ describe('move', () => {
     expect(items).toEqual(['a', 'b', 'c']);
   });
 });
+
+describe('video uploads', () => {
+  it('recognises MP4 and MOV, including by extension, with a 100 MB limit', async () => {
+    const { contentTypeOf: typeOf, maxBytesFor, isVideoType } = await import('./upload');
+    expect(typeOf(new File([''], 'clip.mp4', { type: 'video/mp4' }))).toBe('video/mp4');
+    expect(typeOf(new File([''], 'IMG_0001.MOV', { type: '' }))).toBe('video/quicktime');
+    expect(typeOf(new File([''], 'clip.webm', { type: 'video/webm' }))).toBeNull();
+    expect(isVideoType('video/quicktime')).toBe(true);
+    expect(maxBytesFor('video/mp4')).toBe(100 * 1024 * 1024);
+    expect(maxBytesFor('image/png')).toBe(20 * 1024 * 1024);
+  });
+});

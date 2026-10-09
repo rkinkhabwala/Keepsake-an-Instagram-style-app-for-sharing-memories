@@ -24,6 +24,9 @@ export function MemoryGrid({
           <li key={item.id} className="relative">
             <Link to={`/m/${item.id}`} aria-label={`Memory from ${item.occurredOn}`}>
               <BlurhashImage src={item.thumbUrl} blurhash={item.blurhash} alt="" aspectRatio={1} />
+              {item.video && (
+                <span aria-hidden className="absolute bottom-1 left-1 text-xs text-white drop-shadow">▶</span>
+              )}
               {item.mediaCount > 1 && (
                 <span aria-hidden className="absolute right-1 top-1 text-xs text-white drop-shadow">
                   ❐

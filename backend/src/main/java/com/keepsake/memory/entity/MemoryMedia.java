@@ -52,6 +52,9 @@ public class MemoryMedia {
     @Column(length = 64)
     private String blurhash;
 
+    @Column(name = "poster_key")
+    private String posterKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -66,7 +69,7 @@ public class MemoryMedia {
         this.memoryId = memoryId;
         this.uploadId = upload.getId();
         this.position = (short) position;
-        this.type = MediaType.IMAGE;
+        this.type = upload.isVideo() ? MediaType.VIDEO : MediaType.IMAGE;
         this.originalKey = upload.getOriginalKey();
     }
 
@@ -89,6 +92,8 @@ public class MemoryMedia {
         width = upload.getWidth();
         height = upload.getHeight();
         blurhash = upload.getBlurhash();
+        posterKey = upload.getPosterKey();
+        durationMs = upload.getDurationMs();
     }
 
     public boolean isReady() {
@@ -129,6 +134,14 @@ public class MemoryMedia {
 
     public Integer getHeight() {
         return height;
+    }
+
+    public String getPosterKey() {
+        return posterKey;
+    }
+
+    public Integer getDurationMs() {
+        return durationMs;
     }
 
     public String getBlurhash() {

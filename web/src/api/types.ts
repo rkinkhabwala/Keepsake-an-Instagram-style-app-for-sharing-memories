@@ -61,6 +61,9 @@ export interface MemoryMedia {
   width: number | null;
   height: number | null;
   blurhash: string | null;
+  /** Videos only: the poster frame, and the length in milliseconds. */
+  posterUrl: string | null;
+  durationMs: number | null;
 }
 
 export interface Comment {
@@ -98,6 +101,8 @@ export interface GridItem {
   blurhash: string | null;
   mediaCount: number;
   occurredOn: string;
+  /** True when the memory's first item is a video. */
+  video: boolean;
 }
 
 export type AlbumRole = 'OWNER' | 'EDITOR' | 'VIEWER' | 'NONE';

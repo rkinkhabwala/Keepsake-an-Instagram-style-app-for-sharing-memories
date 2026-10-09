@@ -82,6 +82,17 @@ public class MediaStorage {
         }
     }
 
+    /** Streams an object to a local file (for large originals such as video). */
+    public void download(String key, java.nio.file.Path target) {
+        s3Client.getObject(request -> request.bucket(bucket).key(key),
+                software.amazon.awssdk.core.sync.ResponseTransformer.toFile(target));
+    }
+
+    public void writeFile(String key, java.nio.file.Path file, String contentType) {
+        s3Client.putObject(request -> request.bucket(bucket).key(key).contentType(contentType),
+                RequestBody.fromFile(file));
+    }
+
     public void write(String key, byte[] bytes, String contentType) {
         s3Client.putObject(request -> request.bucket(bucket).key(key).contentType(contentType),
                 RequestBody.fromBytes(bytes));

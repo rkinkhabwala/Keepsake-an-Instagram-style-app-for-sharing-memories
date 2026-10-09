@@ -95,7 +95,7 @@ describe('CreateMemoryPage', () => {
       applyAccept: false,
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('clip.gif is not a JPEG, PNG, HEIC, or WebP photo.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('clip.gif is not a JPEG, PNG, HEIC, or WebP photo, or an MP4 or MOV video.');
     expect(api.calls.some((call) => call.path === '/api/media/upload-urls')).toBe(false);
   });
 });

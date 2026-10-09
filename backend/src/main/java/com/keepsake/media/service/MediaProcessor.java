@@ -2,10 +2,12 @@ package com.keepsake.media.service;
 
 import com.keepsake.media.entity.MediaUpload;
 import com.keepsake.media.entity.MediaUploadStatus;
-import com.keepsake.media.entity.ProcessedImage;
+import com.keepsake.media.entity.ProcessedMedia;
 import com.keepsake.media.repository.MediaUploadRepository;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -30,6 +32,7 @@ public class MediaProcessor {
     private final ExifReader exifReader;
     private final ImageDecoder decoder;
     private final ImageRenditions renditions;
+    private final VideoTranscoder videoTranscoder;
     private final MeterRegistry meterRegistry;
 
     public MediaProcessor(
@@ -38,6 +41,7 @@ public class MediaProcessor {
             ExifReader exifReader,
             ImageDecoder decoder,
             ImageRenditions renditions,
+            VideoTranscoder videoTranscoder,
             MeterRegistry meterRegistry
     ) {
         this.uploadRepository = uploadRepository;
@@ -45,6 +49,7 @@ public class MediaProcessor {
         this.exifReader = exifReader;
         this.decoder = decoder;
         this.renditions = renditions;
+        this.videoTranscoder = videoTranscoder;
         this.meterRegistry = meterRegistry;
     }
 
@@ -85,7 +90,10 @@ public class MediaProcessor {
         }
     }
 
-    private ProcessedImage render(MediaUpload upload) throws MediaProcessingException, IOException {
+    private ProcessedMedia render(MediaUpload upload) throws MediaProcessingException, IOException {
+        if (upload.isVideo()) {
+            return renderVideo(upload);
+        }
         byte[] original = readOriginal(upload);
         ImageType declared = ImageType.fromContentType(upload.getContentType())
                 .orElseThrow(() -> new MediaProcessingException("Unsupported content type"));
@@ -101,7 +109,7 @@ public class MediaProcessor {
         BufferedImage thumb = renditions.thumb(image);
         storage.write(upload.displayKeyFor(), renditions.webp(display), WEBP);
         storage.write(upload.thumbKeyFor(), renditions.webp(thumb), WEBP);
-        return new ProcessedImage(
+        return new ProcessedMedia(
                 upload.displayKeyFor(),
                 upload.thumbKeyFor(),
                 display.getWidth(),
@@ -109,17 +117,73 @@ public class MediaProcessor {
                 Blurhash.encode(thumb, 4, 3),
                 exif.takenOn(),
                 exif.latitude(),
-                exif.longitude());
+                exif.longitude(),
+                null,
+                null);
+    }
+
+    /**
+     * Video: verify the container and limits with ffprobe, take a poster frame (rendered like a photo: EXIF-free
+     * 1080px WebP, 320px thumb, blurhash), and transcode a metadata-free 720p MP4. The original is streamed to a
+     * temp file rather than held in memory.
+     */
+    private ProcessedMedia renderVideo(MediaUpload upload) throws MediaProcessingException, IOException {
+        checkStoredSize(upload);
+        Path directory = Files.createTempDirectory("keepsake-video-");
+        try {
+            Path original = directory.resolve("original");
+            storage.download(upload.getOriginalKey(), original);
+            byte[] head;
+            try (var input = Files.newInputStream(original)) {
+                head = input.readNBytes(64);
+            }
+            if (VideoType.detect(head).isEmpty()) {
+                throw new MediaProcessingException(ImageType.detect(head).isPresent()
+                        ? "File content does not match its declared type"
+                        : "File is not a supported video");
+            }
+            VideoTranscoder.VideoInfo info = videoTranscoder.probe(original);
+            Path posterPng = videoTranscoder.poster(original, Math.min(1000, info.durationMs() / 2), directory);
+            BufferedImage poster = decoder.decode(Files.readAllBytes(posterPng), ImageType.PNG, 1);
+            BufferedImage posterDisplay = renditions.display(poster);
+            BufferedImage thumb = renditions.thumb(poster);
+            Path mp4 = videoTranscoder.transcode(original, directory);
+            VideoTranscoder.VideoInfo output = videoTranscoder.probe(mp4);
+
+            storage.write(upload.displayKeyFor(), renditions.webp(posterDisplay), WEBP);
+            storage.write(upload.thumbKeyFor(), renditions.webp(thumb), WEBP);
+            storage.writeFile(upload.videoKeyFor(), mp4, "video/mp4");
+            return new ProcessedMedia(
+                    upload.videoKeyFor(),
+                    upload.thumbKeyFor(),
+                    output.width(),
+                    output.height(),
+                    Blurhash.encode(thumb, 4, 3),
+                    null,
+                    null,
+                    null,
+                    upload.displayKeyFor(),
+                    (int) output.durationMs());
+        } finally {
+            try (var paths = Files.walk(directory)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+            }
+        }
     }
 
     /** Reads the original after checking it exists and is no larger than the size the client declared. */
     byte[] readOriginal(MediaUpload upload) throws MediaProcessingException {
+        checkStoredSize(upload);
+        return storage.read(upload.getOriginalKey());
+    }
+
+    private void checkStoredSize(MediaUpload upload) throws MediaProcessingException {
         long storedSize = storage.size(upload.getOriginalKey())
                 .orElseThrow(() -> new MediaProcessingException("Uploaded file was not found"));
-        if (storedSize > upload.getSizeBytes() || storedSize > MediaUploadService.MAX_IMAGE_BYTES) {
+        long limit = upload.isVideo() ? MediaUploadService.MAX_VIDEO_BYTES : MediaUploadService.MAX_IMAGE_BYTES;
+        if (storedSize > upload.getSizeBytes() || storedSize > limit) {
             throw new MediaProcessingException("Uploaded file is larger than declared");
         }
-        return storage.read(upload.getOriginalKey());
     }
 
     private boolean fail(MediaUpload upload, String reason) {

@@ -82,7 +82,7 @@ export function memory(overrides: Partial<Memory> = {}): Memory {
     commentCount: 0,
     likedByViewer: false,
     savedByViewer: false,
-    media: [{ position: 0, type: 'IMAGE', displayUrl: '/d.webp', thumbUrl: '/t.webp', width: 1080, height: 720, blurhash: 'L00000fQfQfQfQfQfQfQfQfQfQfQ' }],
+    media: [{ position: 0, type: 'IMAGE', displayUrl: '/d.webp', thumbUrl: '/t.webp', width: 1080, height: 720, blurhash: 'L00000fQfQfQfQfQfQfQfQfQfQfQ', posterUrl: null, durationMs: null }],
     taggedPeople: [],
     latestComments: [],
     createdAt: '2026-01-01T00:00:00Z',

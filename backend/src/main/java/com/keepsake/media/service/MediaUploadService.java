@@ -26,8 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class MediaUploadService {
 
     public static final long MAX_IMAGE_BYTES = 20L * 1024 * 1024;
+    public static final long MAX_VIDEO_BYTES = 100L * 1024 * 1024;
     public static final int MAX_ITEMS = 10;
-    private static final Set<String> VIDEO_TYPES = Set.of("video/mp4", "video/quicktime");
 
     private final MediaUploadRepository uploadRepository;
     private final MediaStorage storage;
@@ -102,6 +102,10 @@ public class MediaUploadService {
         if (upload.getStatus() == MediaUploadStatus.READY) {
             return new UploadMetadataDto(upload.getTakenOn(), upload.getGpsLat(), upload.getGpsLng());
         }
+        if (upload.isVideo()) {
+            // Video date and place hints are not read; the create form falls back to today.
+            return new UploadMetadataDto(null, null, null);
+        }
         byte[] original;
         try {
             original = processor.readOriginal(upload);
@@ -139,14 +143,15 @@ public class MediaUploadService {
             throw new InvalidRequestException("contentType is required");
         }
         String contentType = item.contentType().trim().toLowerCase(java.util.Locale.ROOT);
-        if (VIDEO_TYPES.contains(contentType)) {
-            throw new InvalidRequestException("Video uploads are not supported yet");
+        boolean video = VideoType.fromContentType(contentType).isPresent();
+        if (!video && ImageType.fromContentType(contentType).isEmpty()) {
+            throw new InvalidRequestException("Unsupported content type; use JPEG, PNG, HEIC, WebP, MP4, or MOV");
         }
-        if (ImageType.fromContentType(contentType).isEmpty()) {
-            throw new InvalidRequestException("Unsupported content type; use JPEG, PNG, HEIC, or WebP");
-        }
-        if (item.sizeBytes() == null || item.sizeBytes() < 1 || item.sizeBytes() > MAX_IMAGE_BYTES) {
-            throw new InvalidRequestException("Images must be between 1 byte and 20 MB");
+        long limit = video ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+        if (item.sizeBytes() == null || item.sizeBytes() < 1 || item.sizeBytes() > limit) {
+            throw new InvalidRequestException(video
+                    ? "Videos must be between 1 byte and 100 MB (and at most 60 seconds)"
+                    : "Images must be between 1 byte and 20 MB");
         }
     }
 }

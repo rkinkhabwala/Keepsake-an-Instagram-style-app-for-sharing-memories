@@ -6,11 +6,12 @@ COPY src ./src
 RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
-# libheif's heif-dec decodes HEIC uploads; the libde265 plugin supplies the HEVC codec.
+# libheif's heif-dec decodes HEIC uploads (the libde265 plugin supplies the HEVC codec); FFmpeg makes video
+# posters and 720p transcodes.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libheif-examples libheif-plugin-libde265 \
+    && apt-get install -y --no-install-recommends libheif-examples libheif-plugin-libde265 ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && command -v heif-dec
+    && command -v heif-dec && command -v ffmpeg && command -v ffprobe
 WORKDIR /app
 COPY --from=build /workspace/target/keepsake-backend-0.1.0-SNAPSHOT.jar app.jar
 EXPOSE 8080

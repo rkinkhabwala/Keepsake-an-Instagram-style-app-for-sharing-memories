@@ -2,7 +2,17 @@ import { type DragEvent, type FormEvent, useEffect, useRef, useState } from 'rea
 import { useNavigate } from 'react-router-dom';
 import { fetchUploadMetadata, useCreateMemory } from '../api/queries';
 import type { UploadMetadata, Visibility } from '../api/types';
-import { MAX_FILES, MAX_IMAGE_BYTES, contentTypeOf, move, putFile, requestUploadSlots } from '../api/upload';
+import {
+  MAX_FILES,
+  MAX_VIDEO_SECONDS,
+  contentTypeOf,
+  isVideoType,
+  maxBytesFor,
+  move,
+  putFile,
+  requestUploadSlots,
+  videoDurationSeconds,
+} from '../api/upload';
 import { PeoplePicker } from '../components/PeoplePicker';
 import { VisibilityPicker } from '../components/VisibilityPicker';
 import { Button, ErrorNotice, Field, inputClass } from '../components/ui';
@@ -50,9 +60,15 @@ export function CreateMemoryPage() {
     const accepted: { file: File; contentType: string }[] = [];
     for (const file of files.slice(0, Math.max(0, room))) {
       const contentType = contentTypeOf(file);
-      if (!contentType) setProblem(`${file.name} is not a JPEG, PNG, HEIC, or WebP photo.`);
-      else if (file.size > MAX_IMAGE_BYTES) setProblem(`${file.name} is larger than 20 MB.`);
-      else accepted.push({ file, contentType });
+      if (!contentType) {
+        setProblem(`${file.name} is not a JPEG, PNG, HEIC, or WebP photo, or an MP4 or MOV video.`);
+      } else if (file.size > maxBytesFor(contentType)) {
+        setProblem(`${file.name} is larger than ${isVideoType(contentType) ? '100' : '20'} MB.`);
+      } else if (isVideoType(contentType) && (await videoDurationSeconds(file)) > MAX_VIDEO_SECONDS + 0.5) {
+        setProblem(`${file.name} is longer than ${MAX_VIDEO_SECONDS} seconds.`);
+      } else {
+        accepted.push({ file, contentType });
+      }
     }
     if (accepted.length === 0) return;
     const added: Item[] = accepted.map(({ file }) => ({
@@ -134,7 +150,7 @@ export function CreateMemoryPage() {
           <input
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,video/mp4,video/quicktime,.mov"
             className="sr-only"
             onChange={(event) => {
               if (event.target.files) addFiles([...event.target.files]);
@@ -142,7 +158,9 @@ export function CreateMemoryPage() {
             }}
           />
         </label>
-        <p className="mt-2 text-xs text-stone-500">Up to {MAX_FILES} photos, 20 MB each.</p>
+        <p className="mt-2 text-xs text-stone-500">
+          Up to {MAX_FILES} photos or videos: photos up to 20 MB, videos up to 100 MB and {MAX_VIDEO_SECONDS} seconds.
+        </p>
       </div>
       {problem && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{problem}</p>}
 
@@ -162,7 +180,12 @@ export function CreateMemoryPage() {
               }}
               className="relative overflow-hidden rounded-lg bg-stone-200 dark:bg-stone-800"
             >
-              <img src={item.preview} alt={`Photo ${index + 1}`} className="aspect-square w-full object-cover" />
+              {isVideoType(item.file.type || contentTypeOf(item.file) || '') ? (
+                <video src={item.preview} muted playsInline preload="metadata" aria-label={`Video ${index + 1}`}
+                  className="aspect-square w-full object-cover" />
+              ) : (
+                <img src={item.preview} alt={`Photo ${index + 1}`} className="aspect-square w-full object-cover" />
+              )}
               <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20">
                 <div
                   role="progressbar"

@@ -186,7 +186,8 @@ class MediaPipelineIntegrationTest extends IntegrationTestBase {
         TestUser owner = signup("mp_validate");
 
         expectBadRequest(owner, List.of(Map.of("contentType", "image/gif", "sizeBytes", 10)), "Unsupported");
-        expectBadRequest(owner, List.of(Map.of("contentType", "video/mp4", "sizeBytes", 10)), "Video");
+        expectBadRequest(owner, List.of(Map.of("contentType", "video/mp4", "sizeBytes", 100L * 1024 * 1024 + 1)),
+                "100 MB");
         expectBadRequest(owner, List.of(Map.of("contentType", "image/jpeg", "sizeBytes", 20 * 1024 * 1024 + 1)),
                 "20 MB");
         expectBadRequest(owner, List.of(Map.of("contentType", "image/jpeg", "sizeBytes", 0)), "20 MB");

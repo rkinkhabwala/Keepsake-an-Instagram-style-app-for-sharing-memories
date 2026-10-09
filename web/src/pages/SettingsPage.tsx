@@ -13,7 +13,7 @@ import {
   useUserList,
 } from '../api/queries';
 import type { Me } from '../api/types';
-import { MAX_IMAGE_BYTES, contentTypeOf, putFile, requestUploadSlots } from '../api/upload';
+import { MAX_IMAGE_BYTES, contentTypeOf, isVideoType, putFile, requestUploadSlots } from '../api/upload';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { ThemePicker } from '../components/ThemePicker';
@@ -53,7 +53,7 @@ function EditProfile({ me }: { me: Me }) {
 
   const changeAvatar = async (file: File) => {
     const contentType = contentTypeOf(file);
-    if (!contentType || file.size > MAX_IMAGE_BYTES) {
+    if (!contentType || isVideoType(contentType) || file.size > MAX_IMAGE_BYTES) {
       setAvatarState('Choose a JPEG, PNG, HEIC, or WebP photo under 20 MB.');
       return;
     }

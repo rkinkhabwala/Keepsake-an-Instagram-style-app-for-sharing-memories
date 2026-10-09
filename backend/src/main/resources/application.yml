@@ -74,5 +74,7 @@ keepsake:
     heif-decoder: ${KEEPSAKE_HEIF_DECODER:heif-dec}
     heif-info: ${KEEPSAKE_HEIF_INFO:heif-info}
     processing-timeout: ${KEEPSAKE_PROCESSING_TIMEOUT:PT10M}
+    ffmpeg: ${KEEPSAKE_FFMPEG:ffmpeg}
+    ffprobe: ${KEEPSAKE_FFPROBE:ffprobe}
   seed:
     enabled: ${KEEPSAKE_SEED_ENABLED:false}

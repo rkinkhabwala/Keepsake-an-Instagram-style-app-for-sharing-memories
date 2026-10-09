@@ -12,8 +12,8 @@ describe('OnThisDayPage', () => {
     api.on('GET', /\/api\/resurface\/on-this-day\?date=\d{4}-\d{2}-\d{2}$/, {
       date: '2026-07-04',
       years: [
-        { year: 2025, yearsAgo: 1, memories: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2025-07-04' }] },
-        { year: 2023, yearsAgo: 3, memories: [{ id: 'm2', thumbUrl: '/t.webp', blurhash: null, mediaCount: 2, occurredOn: '2023-07-04' }] },
+        { year: 2025, yearsAgo: 1, memories: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2025-07-04', video: false }] },
+        { year: 2023, yearsAgo: 3, memories: [{ id: 'm2', thumbUrl: '/t.webp', blurhash: null, mediaCount: 2, occurredOn: '2023-07-04', video: false }] },
       ],
     });
     renderApp(<OnThisDayPage />, { route: '/on-this-day', path: '/on-this-day' });
