@@ -19,7 +19,7 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
             VALUES (:followerId, :followeeId, :status, NOW(), NOW())
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)
-    void insertIfAbsent(UUID followerId, UUID followeeId, String status);
+    int insertIfAbsent(UUID followerId, UUID followeeId, String status);
 
     @Modifying
     @Query(value = """

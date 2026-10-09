@@ -18,6 +18,12 @@ public record SignupRequest(
         String password,
         @NotBlank
         @Size(max = 100)
-        String displayName
+        String displayName,
+        /** The browser's IANA time zone, e.g. Europe/Paris; optional. */
+        String timeZone
 ) {
+
+    public SignupRequest(String username, String email, String password, String displayName) {
+        this(username, email, password, displayName, null);
+    }
 }

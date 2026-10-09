@@ -1,5 +1,6 @@
 package com.keepsake.engagement.service;
 
+import com.keepsake.notification.service.NotificationEvents;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
@@ -36,6 +37,7 @@ public class EngagementService {
     private final CommentRepository commentRepository;
     private final CommentAssembler commentAssembler;
     private final Clock clock;
+    private final NotificationEvents notificationEvents;
 
     public EngagementService(
             MemoryService memoryService,
@@ -44,7 +46,8 @@ public class EngagementService {
             SaveRepository saveRepository,
             CommentRepository commentRepository,
             CommentAssembler commentAssembler,
-            Clock clock
+            Clock clock,
+            NotificationEvents notificationEvents
     ) {
         this.memoryService = memoryService;
         this.counters = counters;
@@ -53,14 +56,16 @@ public class EngagementService {
         this.commentRepository = commentRepository;
         this.commentAssembler = commentAssembler;
         this.clock = clock;
+        this.notificationEvents = notificationEvents;
     }
 
     /** Idempotent; the like count only moves when a like is actually added. */
     @Transactional
     public void like(UUID viewerId, UUID memoryId) {
-        memoryService.requireVisible(viewerId, memoryId);
+        Memory memory = memoryService.requireVisible(viewerId, memoryId);
         if (likeRepository.insertIfAbsent(viewerId, memoryId) == 1) {
             counters.likeChanged(memoryId, 1);
+            notificationEvents.liked(viewerId, memory.getAuthorId(), memoryId);
         }
     }
 
@@ -101,6 +106,7 @@ public class EngagementService {
         if (body.isEmpty() || body.length() > MAX_COMMENT_LENGTH) {
             throw new InvalidRequestException("Comments must be between 1 and " + MAX_COMMENT_LENGTH + " characters");
         }
+        UUID parentAuthorId = null;
         if (request.parentId() != null) {
             Comment parent = commentRepository.findById(request.parentId())
                     .filter(candidate -> candidate.getMemoryId().equals(memoryId))
@@ -111,9 +117,14 @@ public class EngagementService {
             if (parent.isDeleted()) {
                 throw new InvalidRequestException("You cannot reply to a deleted comment");
             }
+            parentAuthorId = parent.getAuthorId();
         }
         Comment comment = commentRepository.saveAndFlush(new Comment(memoryId, viewerId, request.parentId(), body));
         counters.commentChanged(memoryId, 1);
+        notificationEvents.commented(viewerId, memory.getAuthorId(), memoryId, comment.getId());
+        if (parentAuthorId != null && !parentAuthorId.equals(memory.getAuthorId())) {
+            notificationEvents.commented(viewerId, parentAuthorId, memoryId, comment.getId());
+        }
         return commentAssembler.single(viewerId, memory.getAuthorId(), comment);
     }
 

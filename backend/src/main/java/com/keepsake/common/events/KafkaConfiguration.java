@@ -35,6 +35,26 @@ public class KafkaConfiguration {
         return TopicBuilder.name(Topics.AVATAR_MEDIA + ".DLT").partitions(PARTITIONS).replicas(1).build();
     }
 
+    @Bean
+    NewTopic socialEventsTopic() {
+        return TopicBuilder.name(Topics.SOCIAL_EVENTS).partitions(PARTITIONS).replicas(1).build();
+    }
+
+    @Bean
+    NewTopic socialEventsDeadLetterTopic() {
+        return TopicBuilder.name(Topics.SOCIAL_EVENTS + ".DLT").partitions(PARTITIONS).replicas(1).build();
+    }
+
+    @Bean
+    NewTopic memoryEventsTopic() {
+        return TopicBuilder.name(Topics.MEMORY_EVENTS).partitions(PARTITIONS).replicas(1).build();
+    }
+
+    @Bean
+    NewTopic memoryEventsDeadLetterTopic() {
+        return TopicBuilder.name(Topics.MEMORY_EVENTS + ".DLT").partitions(PARTITIONS).replicas(1).build();
+    }
+
     /**
      * A record whose handling keeps failing is retried three times a second apart, then moved to
      * {@code <topic>.DLT} (same partition) so it cannot block the records behind it.

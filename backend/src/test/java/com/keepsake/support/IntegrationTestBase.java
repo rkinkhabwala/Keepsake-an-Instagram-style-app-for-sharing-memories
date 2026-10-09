@@ -17,7 +17,8 @@ import org.testcontainers.utility.DockerImageName;
  * this same configuration: a second context would run a second set of Kafka consumers in the same groups, so
  * jobs (and their metrics) could be handled by the other context. Metrics export is on, as in the running app.
  */
-@SpringBootTest
+// A real port, so WebSocket clients can connect; MockMvc still serves the REST tests.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @AutoConfigureObservability(tracing = false)
 public abstract class IntegrationTestBase {

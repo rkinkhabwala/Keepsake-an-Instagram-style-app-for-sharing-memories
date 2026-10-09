@@ -1,5 +1,6 @@
 package com.keepsake.memory.service;
 
+import com.keepsake.notification.service.NotificationEvents;
 import com.keepsake.common.error.ConflictException;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.pagination.InvalidRequestException;
@@ -60,6 +61,7 @@ public class MemoryService {
     private final TransactionTemplate transactions;
     private final HashtagService hashtagService;
     private final FeedFanOut feedFanOut;
+    private final NotificationEvents notificationEvents;
 
     public MemoryService(
             MemoryRepository memoryRepository,
@@ -74,7 +76,8 @@ public class MemoryService {
             Clock clock,
             TransactionTemplate transactions,
             HashtagService hashtagService,
-            FeedFanOut feedFanOut
+            FeedFanOut feedFanOut,
+            NotificationEvents notificationEvents
     ) {
         this.memoryRepository = memoryRepository;
         this.mediaRepository = mediaRepository;
@@ -89,6 +92,7 @@ public class MemoryService {
         this.transactions = transactions;
         this.hashtagService = hashtagService;
         this.feedFanOut = feedFanOut;
+        this.notificationEvents = notificationEvents;
     }
 
     /**
@@ -181,6 +185,11 @@ public class MemoryService {
         }
         if (request.taggedUsernames() != null) {
             Set<UUID> tagged = taggedUserIds(viewerId, request.taggedUsernames());
+            if (memory.getStatus() == MemoryStatus.READY) {
+                Set<UUID> added = new LinkedHashSet<>(tagged);
+                personRepository.findUserIds(memoryId).forEach(added::remove);
+                notificationEvents.tagged(viewerId, added, memoryId);
+            }
             personRepository.deleteByMemoryId(memoryId);
             personRepository.flush();
             tagged.forEach(userId -> personRepository.save(new MemoryPerson(memoryId, userId)));
@@ -235,7 +244,12 @@ public class MemoryService {
                 allReady = false;
             }
         }
+        boolean wasReady = memory.getStatus() == MemoryStatus.READY;
         memory.setStatus(allReady && !media.isEmpty() ? MemoryStatus.READY : MemoryStatus.FAILED);
+        if (memory.getStatus() == MemoryStatus.READY && !wasReady) {
+            // Tagged people hear about the memory once they can see it.
+            notificationEvents.tagged(memory.getAuthorId(), personRepository.findUserIds(memoryId), memoryId);
+        }
         if (memory.getStatus() == MemoryStatus.READY) {
             // Before commit, so the memory is in feeds as soon as it is READY. Readers skip it until then, and a
             // crash before commit redelivers the media job, which completes and fans out again.

@@ -80,6 +80,8 @@ public class SecurityConfiguration {
                         // Scraped by Prometheus inside Compose; the backend port is bound to localhost and the web
                         // proxy only forwards /api, so it is not reachable from the network.
                         .requestMatchers("/actuator/prometheus").permitAll()
+                        // The WebSocket handshake; the STOMP CONNECT frame carries the access token.
+                        .requestMatchers("/ws").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(accessTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(AbstractHttpConfigurer::disable)
