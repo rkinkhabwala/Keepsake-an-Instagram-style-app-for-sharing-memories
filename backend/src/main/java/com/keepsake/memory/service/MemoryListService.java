@@ -4,6 +4,7 @@ import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
 import com.keepsake.common.pagination.InvalidCursorException;
 import com.keepsake.memory.dto.MemoryDto;
+import com.keepsake.memory.dto.MapMemoriesDto;
 import com.keepsake.memory.dto.MemoryGridItemDto;
 import com.keepsake.memory.entity.Memory;
 import com.keepsake.memory.repository.MemoryRepository;
@@ -43,7 +44,7 @@ public class MemoryListService {
 
     @Transactional(readOnly = true)
     public CursorPage<MemoryGridItemDto> grid(UUID viewerId, String username, CursorPageRequest page) {
-        User author = userService.requireByUsername(username);
+        User author = userService.requireViewableByUsername(viewerId, username);
         return page(memoryRepository.findByAuthorVisibleTo(author.getId(), viewerId, page.cursorOrMax(),
                 page.limit() + 1), page, assembler::toGridItems);
     }
@@ -51,7 +52,7 @@ public class MemoryListService {
     /** The "Tagged" profile tab: memories the user was tagged in, limited to those the viewer may see. */
     @Transactional(readOnly = true)
     public CursorPage<MemoryGridItemDto> tagged(UUID viewerId, String username, CursorPageRequest page) {
-        User tagged = userService.requireByUsername(username);
+        User tagged = userService.requireViewableByUsername(viewerId, username);
         return page(memoryRepository.findTaggedVisibleTo(tagged.getId(), viewerId, page.cursorOrMax(),
                 page.limit() + 1), page, assembler::toGridItems);
     }
@@ -83,6 +84,18 @@ public class MemoryListService {
         Instant lastSavedAt = memoryRepository.findSaveTime(viewerId, last).orElseThrow();
         String nextCursor = ChronoUnit.MICROS.between(Instant.EPOCH, lastSavedAt) + "." + last;
         return new CursorPage<>(assembler.toGridItems(items), nextCursor);
+    }
+
+    static final int MAP_LIMIT = 500;
+
+    /** Map markers inside a box (spec §8), scoped to own, followed, and tagged memories (Phase 2 decision). */
+    @Transactional(readOnly = true)
+    public MapMemoriesDto map(UUID viewerId, String bbox) {
+        BoundingBox box = BoundingBox.parse(bbox);
+        List<Memory> rows = memoryRepository.findOnMap(viewerId, box.minLng(), box.minLat(), box.maxLng(),
+                box.maxLat(), box.crossesAntimeridian(), MAP_LIMIT + 1);
+        boolean truncated = rows.size() > MAP_LIMIT;
+        return new MapMemoriesDto(assembler.toMapItems(truncated ? rows.subList(0, MAP_LIMIT) : rows), truncated);
     }
 
     /** How many of the author's memories the viewer can see, so hidden memories are not even counted. */

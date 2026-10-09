@@ -90,6 +90,18 @@ class AccountDeletionIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(as(friend, put("/api/memories/" + ownMemory + "/save"))).andExpect(status().isNoContent());
         comment(friend, ownMemory, null);
 
+        // Albums: one they own, and a friend's album they collaborate on and added their memory to.
+        UUID ownAlbum = album(leaving, "Mine");
+        UUID friendsAlbum = album(friend, "Friend's");
+        mockMvc.perform(as(friend, post("/api/albums/" + friendsAlbum + "/collaborators"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("userId", leaving.id(), "role", "EDITOR"))))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(as(leaving, post("/api/albums/" + friendsAlbum + "/memories"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("memoryIds", List.of(ownMemory)))))
+                .andExpect(status().isNoContent());
+
         List<String> keys = new ArrayList<>();
         for (MediaUpload upload : uploadRepository.findAllByOwnerId(leaving.id())) {
             keys.add(upload.getOriginalKey());
@@ -127,6 +139,11 @@ class AccountDeletionIntegrationTest extends IntegrationTestBase {
         assertThat(count("SELECT COUNT(*) FROM saves WHERE user_id = ? OR memory_id = ?", id, ownMemory)).isZero();
         assertThat(count("SELECT COUNT(*) FROM comments WHERE author_id = ? OR memory_id = ? OR parent_id = ?",
                 id, ownMemory, comment)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM albums WHERE owner_id = ? OR id = ?", id, ownAlbum)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM album_collaborators WHERE user_id = ?", id)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM album_memories WHERE added_by = ? OR memory_id = ?", id, ownMemory))
+                .isZero();
+        assertThat(count("SELECT COUNT(*) FROM albums WHERE id = ?", friendsAlbum)).isOne();
         assertThat(keys).allSatisfy(key -> assertThat(storage.size(key)).isEmpty());
 
         // Other people's memories keep correct counts and lose nothing else.
@@ -160,6 +177,15 @@ class AccountDeletionIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return UUID.fromString(objectMapper.readTree(response).get("id").asText());
+    }
+
+    private UUID album(TestUser owner, String title) throws Exception {
+        String body = mockMvc.perform(as(owner, post("/api/albums"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("title", title, "visibility", "PUBLIC"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("id").asText());
     }
 
     private String uploadStatus(UUID uploadId) {

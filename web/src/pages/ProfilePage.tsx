@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { type GridTab, useFollow, useGrid, useProfile } from '../api/queries';
+import { type GridTab, useBlock, useFollow, useGrid, useProfile } from '../api/queries';
 import type { Profile } from '../api/types';
+import { AlbumList } from '../components/AlbumList';
 import { Avatar } from '../components/Avatar';
 import { MemoryGrid } from '../components/MemoryGrid';
 import { Button, ErrorNotice, Spinner } from '../components/ui';
@@ -31,6 +32,7 @@ function ProfileView({ profile }: { profile: Profile }) {
     { id: 'memories', label: 'Memories' },
     { id: 'tagged', label: 'Tagged' },
     ...(own ? [{ id: 'saved' as GridTab, label: 'Saved' }] : []),
+    { id: 'albums', label: 'Albums' },
   ];
   const [tab, setTab] = useState<GridTab>('memories');
 
@@ -46,7 +48,10 @@ function ProfileView({ profile }: { profile: Profile }) {
                 Edit profile
               </Link>
             ) : (
-              <FollowButton profile={profile} />
+              <>
+                <FollowButton profile={profile} />
+                <BlockButton profile={profile} />
+              </>
             )}
           </div>
           <ul className="flex gap-5 text-sm">
@@ -89,7 +94,11 @@ function ProfileView({ profile }: { profile: Profile }) {
               </button>
             ))}
           </div>
-          <ProfileGrid username={profile.username} tab={tab} />
+          {tab === 'albums' ? (
+            <AlbumList username={profile.username} own={own} />
+          ) : (
+            <ProfileGrid username={profile.username} tab={tab} />
+          )}
         </>
       )}
     </div>
@@ -97,6 +106,7 @@ function ProfileView({ profile }: { profile: Profile }) {
 }
 
 const EMPTY: Record<GridTab, string> = {
+  albums: '',
   memories: 'No memories yet.',
   tagged: 'No memories with this person tagged yet.',
   saved: 'Memories you save show up here, only for you.',
@@ -114,6 +124,30 @@ function ProfileGrid({ username, tab }: { username: string; tab: GridTab }) {
     <div role="tabpanel">
       <MemoryGrid items={grid.data.pages.flatMap((page) => page.items)} hasMore={!!hasNextPage} onLoadMore={loadMore} empty={EMPTY[tab]} />
     </div>
+  );
+}
+
+function BlockButton({ profile }: { profile: Profile }) {
+  const block = useBlock();
+  const navigate = useNavigate();
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="text-red-600"
+        disabled={block.isPending}
+        onClick={() => {
+          const confirmed = window.confirm(
+            `Block @${profile.username}? You won't see each other's memories, profiles, or comments, and any follows, ` +
+              'close-friend entries, and tags between you are removed. Unblocking later does not restore them.',
+          );
+          if (confirmed) block.mutate({ userId: profile.id, block: true }, { onSuccess: () => navigate('/') });
+        }}
+      >
+        Block
+      </Button>
+      <ErrorNotice error={block.error} />
+    </>
   );
 }
 

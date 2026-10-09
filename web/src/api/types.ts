@@ -100,6 +100,44 @@ export interface GridItem {
   occurredOn: string;
 }
 
+export type AlbumRole = 'OWNER' | 'EDITOR' | 'VIEWER' | 'NONE';
+
+export interface Album {
+  id: string;
+  title: string;
+  description: string | null;
+  visibility: Visibility;
+  owner: UserSummary;
+  viewerRole: AlbumRole;
+  collaborators: { user: UserSummary; role: 'EDITOR' | 'VIEWER' }[];
+  coverThumbUrl: string | null;
+  coverBlurhash: string | null;
+  memoryCount: number;
+  createdAt: string;
+}
+
+export interface MapMemory {
+  id: string;
+  latitude: number;
+  longitude: number;
+  locationName: string | null;
+  occurredOn: string;
+  authorUsername: string;
+  thumbUrl: string | null;
+  blurhash: string | null;
+}
+
+export interface OnThisDayYear {
+  year: number;
+  yearsAgo: number;
+  memories: GridItem[];
+}
+
+export interface OnThisDay {
+  date: string;
+  years: OnThisDayYear[];
+}
+
 export interface UploadSlot {
   uploadId: string;
   url: string;

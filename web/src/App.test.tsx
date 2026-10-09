@@ -34,10 +34,15 @@ describe('App', () => {
     const api = fakeApi();
     signedIn(api);
     api.on('GET', '/api/feed', { items: [memory()], nextCursor: null });
+    api.on('GET', /\/api\/resurface\/on-this-day/, {
+      date: '2026-07-04',
+      years: [{ year: 2025, yearsAgo: 1, memories: [{ id: 'm9', thumbUrl: null, blurhash: null, mediaCount: 1, occurredOn: '2025-07-04' }] }],
+    });
 
     renderAt('/');
 
     expect(await screen.findByText('Happened on July 4, 2019')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /On this day · 1 memory/ })).toHaveAttribute('href', '/on-this-day');
   });
 
   it('shows a not-found page for hidden memories', async () => {

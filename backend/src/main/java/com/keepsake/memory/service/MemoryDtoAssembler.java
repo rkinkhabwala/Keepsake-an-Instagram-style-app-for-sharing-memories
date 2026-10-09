@@ -12,6 +12,7 @@ import com.keepsake.memory.entity.Memory;
 import com.keepsake.memory.entity.MemoryMedia;
 import com.keepsake.memory.repository.MemoryMediaRepository;
 import com.keepsake.memory.repository.MemoryPersonRepository;
+import com.keepsake.memory.dto.MapMemoryDto;
 import com.keepsake.memory.dto.MemoryGridItemDto;
 import com.keepsake.user.dto.UserSummaryDto;
 import com.keepsake.user.entity.User;
@@ -115,6 +116,27 @@ public class MemoryDtoAssembler {
                     items.size(),
                     memory.getOccurredOn());
         }).toList();
+    }
+
+    /** Map markers: coordinates, author, and the first photo's thumb. */
+    public List<MapMemoryDto> toMapItems(List<Memory> memories) {
+        if (memories.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, String> authors = userRepository.findAllById(
+                        memories.stream().map(Memory::getAuthorId).distinct().toList()).stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+        Map<UUID, MemoryGridItemDto> tiles = toGridItems(memories).stream()
+                .collect(Collectors.toMap(MemoryGridItemDto::id, tile -> tile));
+        return memories.stream().map(memory -> new MapMemoryDto(
+                memory.getId(),
+                memory.getLat(),
+                memory.getLng(),
+                memory.getLocationName(),
+                memory.getOccurredOn(),
+                authors.get(memory.getAuthorId()),
+                tiles.get(memory.getId()).thumbUrl(),
+                tiles.get(memory.getId()).blurhash())).toList();
     }
 
     public MemoryMediaDto media(MemoryMedia media) {

@@ -109,6 +109,7 @@ IDs are UUIDv7 (time-ordered, good for cursor pagination). All tables have `crea
 - `id`, `owner_id`, `title`, `description`, `cover_memory_id`, `visibility`
 - **album_memories**: `album_id`, `memory_id`, `position`
 - **album_collaborators**: `album_id`, `user_id`, `role` (`EDITOR` | `VIEWER`) — shared albums, e.g. a trip
+  - When a collaborator leaves, is removed by the owner, or is in a block with the owner, the memories they added leave the album with them.
 
 **hashtags** / **memory_hashtags** (Phase 2)
 

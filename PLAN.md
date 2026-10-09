@@ -1,24 +1,38 @@
 # Keepsake Phase 2 implementation plan
 
+**Status (2026-10-09): built on branch `phase-2`, not yet merged.** All §12 Phase 2 acceptance criteria have passing tests:
+- On This Day across leap years: `OnThisDayTest` and `OnThisDayIntegrationTest`;
+- the map returns only memories the viewer may see: `MapIntegrationTest`;
+- an album collaborator can add their own memories, and album viewers see only memories they could see individually: `AlbumIntegrationTest` and the `album.spec.ts` Playwright flow.
+
+Latest checks: `mvn verify` 309 tests, `npm test` 51, Playwright 5/5 on a fresh seeded stack, feed p95 22.9 ms.
+
 Phase 1 is complete and merged into `main` (its plan is in git history). This plan covers spec §12 Phase 2 only: block list, hashtags, search, On This Day, map, and albums. Nothing from Phase 3.
 
 Same working rules as Phase 1: one feature at a time on a `phase-2` branch, each with its Flyway migration and tests, `mvn verify` and `npm test` (and the Playwright suite) green before the next, small scoped commits.
 
-Dependencies: everything comes from spec §2, plus the approved `leaflet.markercluster`. Search uses plain Postgres B-tree indexes (no trigram, no PostGIS). The open questions at the end list the two type-only packages that still need approval.
+Dependencies: everything comes from spec §2, plus the approved `leaflet.markercluster` and the dev-only typings `@types/leaflet` and `@types/leaflet.markercluster`. Search uses plain Postgres B-tree indexes (no trigram, no PostGIS).
 
 ## Build order
 
 Block list comes first because it changes `MemoryAccessPolicy`, which every later list and endpoint relies on.
 
-1. **Block list.** Add `PUT /api/blocks/{userId}`, `DELETE /api/blocks/{userId}`, and `GET /api/blocks` (cursor-paginated). §10 asks for blocking but §8 lists no endpoints, so these names are a proposal.
+1. **Block list.** Add `PUT /api/blocks/{userId}`, `DELETE /api/blocks/{userId}`, and `GET /api/blocks` (cursor-paginated); approved.
    - **Policy:** blocking goes into `MemoryAccessPolicy`, both the Java `decide` and `VISIBLE_TO_VIEWER_SQL`. A block in *either direction* between viewer and author hides the memory regardless of visibility, follows, or close friends. The author still sees their own memories.
-   - **Blocking removes the relationship:** follows and pending requests both ways, close-friend entries both ways, and tags between the two users.
+   - **Blocking removes the relationship, and unblocking restores none of it:**
+     - follows in both directions;
+     - pending follow requests in both directions;
+     - close-friend entries both ways;
+     - tags between the two users;
+     - album collaboration between them (once albums exist, step 6 applies this too).
    - **While a block exists:**
      - neither user can follow the other;
      - neither can comment on the other's memories (already covered by the policy, which turns the comment into a 404);
      - neither can tag the other, and tagging is rejected as "Unknown user" so the block is not revealed;
      - each one's profile returns 404 to the other;
-     - each one's comments and follower or following entries are hidden from the other.
+     - each one's comments are hidden from the other everywhere, including on third parties' memories and in feed-card comment previews;
+     - each is hidden from the other in search results, follower and following lists, and lists of who liked a memory.
+   - Phase 1 has no "who liked this" list, only a count. Likes lists don't exist yet, so that rule has nothing to apply to; if a likers list is added later, it must filter blocked users.
 2. **Hashtags.** Parse `#tags` from captions on create and edit (letters, numbers and `_`, up to 100 characters, lowercased, NFC-normalized), and store them in `hashtags` and `memory_hashtags`. Add `GET /api/hashtags/{tag}/memories`, a grid filtered by the policy's SQL and paged by memory id. The web client turns `#tags` into links to that page.
 3. **Search.** `GET /api/search?q=` returns users matched by prefix on username or display name, plus hashtags matched by prefix, up to 20 of each.
    - Matching uses B-tree `text_pattern_ops` indexes on lowercased columns.
@@ -34,12 +48,13 @@ Block list comes first because it changes `MemoryAccessPolicy`, which every late
    - A box that crosses the antimeridian (`minLng > maxLng`) is handled.
    - The bbox is validated.
    - A partial B-tree index covers `(lat, lng)` where both are set.
-   - Which memories appear (beyond what the policy allows) is open question 1 below.
+   - Scope (decided): only the viewer's own memories, memories of accounts they follow (ACCEPTED), and memories they're tagged in, all still filtered by the policy's SQL.
 6. **Albums.** Endpoints from §8: `POST /api/albums`, `GET`/`PATCH`/`DELETE /api/albums/{id}`, `POST /api/albums/{id}/memories`, `DELETE /api/albums/{id}/memories/{memoryId}`, `POST /api/albums/{id}/collaborators`. Plus two §8 doesn't list but the screens need: `DELETE /api/albums/{id}/collaborators/{userId}`, and `GET /api/users/{username}/albums` for the profile's Albums tab (§9).
    - **Who can see an album:** an album has a visibility (same four values) relative to its owner. Collaborators can always see it. The album-level rule reuses the policy's visibility function (generalized to "owned content with a visibility") and is not re-derived.
    - **What viewers see inside:** each memory in an album is filtered individually through `MemoryAccessPolicy` for the viewer (§12 acceptance). The cover is shown only if the viewer may see that memory; otherwise the first visible memory is used.
    - **Adding and removing:** the owner and EDITOR collaborators can add only memories they authored. The owner can remove anything, and an editor can remove what they added. VIEWER collaborators can see the album but not change it.
-   - **Blocked users:** they can't be added as collaborators, and blocking removes an existing collaboration.
+   - **Collaborators:** the owner adds people who follow them (ACCEPTED), directly with no invite step. A collaborator can leave an album with `DELETE /api/albums/{id}/collaborators/me`, and the album page has a "Leave album" action.
+   - **Blocked users:** they can't be added as collaborators, and blocking ends any existing collaboration between the two users in either direction.
 7. **Web screens 7–9 and Phase 2 UI.**
    - On This Day ("1 year ago", "3 years ago" sections).
    - Map: plain Leaflet API plus `leaflet.markercluster`, OSM tiles, clustered thumbnail markers, refetching the bbox on pan and zoom. It uses no `react-leaflet`, which isn't in §2.
@@ -84,9 +99,9 @@ Block list comes first because it changes `MemoryAccessPolicy`, which every late
 - **Map:** an integration test with mixed visibility and authors showing the endpoint returns only what the viewer may see; bbox edges, antimeridian, invalid bbox, and the cap.
 - **Albums:** an integration test that a collaborator can add their own memories; an album viewer sees only memories they could see individually (mixed visibility, private authors, blocks); the access matrix for owner, editor, viewer, and stranger; the cover-visibility fallback; and deletion cascades.
 
-## Open questions (please answer with the go-ahead)
+## Decisions (2026-10-09)
 
-1. **Map scope.** Spec §8 says "viewer-visible memories". Read literally, that includes public memories from strangers anywhere in the world, a discovery surface the spec's non-goals steer away from. **Recommended:** the viewer's own memories, memories of accounts they follow, and memories they're tagged in, all still filtered by the policy.
-2. **Album collaborators.** Who can be added, and is there an invite to accept? **Recommended:** the owner can add people who follow them (ACCEPTED), added directly with no invite flow, and any collaborator can leave.
-3. **Map type packages.** May I add the dev-only TypeScript typings `@types/leaflet` and `@types/leaflet.markercluster`? They add no runtime code. Without them the map code needs local type declarations.
-4. **Block endpoints and effects.** Are the proposed `/api/blocks` endpoints and the effects in step 1 what you want? In particular: hiding each other's comments on third-party memories, and permanently removing tags between the two users when one blocks the other.
+1. **Map scope:** own memories, memories of accounts the viewer follows, and memories they're tagged in, all filtered by `MemoryAccessPolicy`.
+2. **Album collaborators:** the owner adds followers directly with no invite step; collaborators can leave (endpoint and UI).
+3. **Typings:** `@types/leaflet` and `@types/leaflet.markercluster` are approved as dev dependencies.
+4. **Blocking:** the `/api/blocks` endpoints are approved. A block removes follows both ways, cancels pending requests, removes close-friends entries both ways, removes tags between the two, ends album collaboration between them, hides each other's comments everywhere, and hides each from the other in search and likes lists. Unblocking restores none of it. Each effect gets its own test.

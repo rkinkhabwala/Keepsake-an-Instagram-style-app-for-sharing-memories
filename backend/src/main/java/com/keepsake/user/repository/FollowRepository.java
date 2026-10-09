@@ -49,21 +49,33 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
 
     long countByIdFollowerIdAndStatus(UUID followerId, FollowStatus status);
 
-    /** Users following {@code followeeId} with the given status, newest account first, ids below the cursor. */
+    /**
+     * Users following {@code followeeId} with the given status, newest account first, ids below the cursor,
+     * leaving out anyone in a block with {@code viewerId}.
+     */
     @Query("""
             SELECT u FROM Follow f, User u
             WHERE u.id = f.id.followerId AND f.id.followeeId = :followeeId AND f.status = :status
                 AND u.id < :cursor
+                AND NOT EXISTS (SELECT 1 FROM Block b
+                    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = u.id)
+                       OR (b.id.blockerId = u.id AND b.id.blockedId = :viewerId))
             ORDER BY u.id DESC
             """)
-    List<User> findFollowers(UUID followeeId, FollowStatus status, UUID cursor, Limit limit);
+    List<User> findFollowers(UUID followeeId, FollowStatus status, UUID viewerId, UUID cursor, Limit limit);
 
-    /** Users followed by {@code followerId} with the given status, newest account first, ids below the cursor. */
+    /**
+     * Users followed by {@code followerId} with the given status, newest account first, ids below the cursor,
+     * leaving out anyone in a block with {@code viewerId}.
+     */
     @Query("""
             SELECT u FROM Follow f, User u
             WHERE u.id = f.id.followeeId AND f.id.followerId = :followerId AND f.status = :status
                 AND u.id < :cursor
+                AND NOT EXISTS (SELECT 1 FROM Block b
+                    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = u.id)
+                       OR (b.id.blockerId = u.id AND b.id.blockedId = :viewerId))
             ORDER BY u.id DESC
             """)
-    List<User> findFollowees(UUID followerId, FollowStatus status, UUID cursor, Limit limit);
+    List<User> findFollowees(UUID followerId, FollowStatus status, UUID viewerId, UUID cursor, Limit limit);
 }

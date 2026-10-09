@@ -11,8 +11,27 @@ function settingsApi() {
   api.on('GET', /\/api\/follow-requests/, { items: [], nextCursor: null });
   api.on('GET', /\/api\/close-friends/, { items: [], nextCursor: null });
   api.on('GET', /\/api\/users\/ana\/followers/, { items: [], nextCursor: null });
+  api.on('GET', /\/api\/blocks/, { items: [], nextCursor: null });
   return api;
 }
+
+describe('SettingsPage blocked accounts', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lists blocked accounts and unblocks them', async () => {
+    const api = settingsApi();
+    api.on('GET', /\/api\/blocks/, {
+      items: [{ id: 'u-zed', username: 'zed', displayName: 'Zed', avatarUrl: null }],
+      nextCursor: null,
+    });
+    api.on('DELETE', '/api/blocks/u-zed', null, 204);
+    renderApp(<SettingsPage />, { route: '/settings', path: '/settings' });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Unblock' }));
+
+    expect(api.calls.some((call) => call.method === 'DELETE' && call.path === '/api/blocks/u-zed')).toBe(true);
+  });
+});
 
 describe('SettingsPage account deletion', () => {
   afterEach(() => vi.unstubAllGlobals());

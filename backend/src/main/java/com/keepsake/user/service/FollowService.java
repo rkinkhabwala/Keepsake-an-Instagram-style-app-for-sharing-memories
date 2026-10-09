@@ -33,7 +33,7 @@ public class FollowService {
     /** Following a private account creates a PENDING request; a public account is followed immediately. */
     @Transactional
     public Relationship follow(UUID viewerId, String username) {
-        User target = userService.requireByUsername(username);
+        User target = userService.requireViewableByUsername(viewerId, username);
         if (target.getId().equals(viewerId)) {
             throw new InvalidRequestException("You cannot follow yourself");
         }
@@ -70,21 +70,21 @@ public class FollowService {
     @Transactional(readOnly = true)
     public CursorPage<UserSummaryDto> pendingRequests(UUID ownerId, CursorPageRequest page) {
         return toPage(followRepository.findFollowers(
-                ownerId, FollowStatus.PENDING, page.cursorOrMax(), page.lookaheadLimit()), page);
+                ownerId, FollowStatus.PENDING, ownerId, page.cursorOrMax(), page.lookaheadLimit()), page);
     }
 
     @Transactional(readOnly = true)
     public CursorPage<UserSummaryDto> followers(UUID viewerId, String username, CursorPageRequest page) {
         User owner = requireViewableAccount(viewerId, username);
         return toPage(followRepository.findFollowers(
-                owner.getId(), FollowStatus.ACCEPTED, page.cursorOrMax(), page.lookaheadLimit()), page);
+                owner.getId(), FollowStatus.ACCEPTED, viewerId, page.cursorOrMax(), page.lookaheadLimit()), page);
     }
 
     @Transactional(readOnly = true)
     public CursorPage<UserSummaryDto> following(UUID viewerId, String username, CursorPageRequest page) {
         User owner = requireViewableAccount(viewerId, username);
         return toPage(followRepository.findFollowees(
-                owner.getId(), FollowStatus.ACCEPTED, page.cursorOrMax(), page.lookaheadLimit()), page);
+                owner.getId(), FollowStatus.ACCEPTED, viewerId, page.cursorOrMax(), page.lookaheadLimit()), page);
     }
 
     @Transactional(readOnly = true)
@@ -120,7 +120,7 @@ public class FollowService {
 
     /** A private account's connections are hidden (404) from anyone who is not the owner or an accepted follower. */
     private User requireViewableAccount(UUID viewerId, String username) {
-        User owner = userService.requireByUsername(username);
+        User owner = userService.requireViewableByUsername(viewerId, username);
         boolean viewable = !owner.isPrivate()
                 || owner.getId().equals(viewerId)
                 || isAcceptedFollower(viewerId, owner.getId());

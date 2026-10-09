@@ -60,7 +60,8 @@ services:
       KEEPSAKE_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-keepsake}
       KEEPSAKE_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-keepsake-local-secret}
       KEEPSAKE_S3_BUCKET: ${MINIO_BUCKET:-keepsake}
-      KEEPSAKE_SEED_ENABLED: ${SEED_DEMO_DATA:-true}
+      # Demo accounts share a published password, so seeding is opt-in: SEED_DEMO=true.
+      KEEPSAKE_SEED_ENABLED: ${SEED_DEMO:-false}
     ports:
       # Reachable from this machine for development, not from the network; browsers go through web.
       - "127.0.0.1:8080:8080"
@@ -82,7 +83,8 @@ services:
     build:
       context: ./web
     ports:
-      - "5173:80"
+      # Local only: reachable from this machine, not from the network.
+      - "127.0.0.1:5173:80"
     depends_on:
       backend:
         condition: service_healthy

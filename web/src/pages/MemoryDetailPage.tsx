@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { useDeleteMemory, useMemory, useRetryMemory, useUpdateMemory } from '../api/queries';
+import { useAddToAlbum, useDeleteMemory, useMemory, useProfileAlbums, useRetryMemory, useUpdateMemory } from '../api/queries';
 import type { Memory, Visibility } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
@@ -95,6 +95,7 @@ function MemoryDetail({ memory }: { memory: Memory }) {
                 ))}
               </p>
             )}
+            {isAuthor && memory.status === 'READY' && <AddToAlbum memoryId={memory.id} username={memory.author.username} />}
             {isAuthor && <DeleteMemoryButton id={memory.id} username={memory.author.username} />}
           </>
         )}
@@ -105,6 +106,31 @@ function MemoryDetail({ memory }: { memory: Memory }) {
         )}
       </div>
     </article>
+  );
+}
+
+/** Adds your memory to an album you own or can edit. */
+function AddToAlbum({ memoryId, username }: { memoryId: string; username: string }) {
+  const albums = useProfileAlbums(username);
+  const add = useAddToAlbum();
+  const [albumId, setAlbumId] = useState('');
+  const [added, setAdded] = useState(false);
+  const editable = (albums.data?.items ?? []).filter((album) => album.viewerRole === 'OWNER' || album.viewerRole === 'EDITOR');
+  if (editable.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select aria-label="Album" value={albumId} onChange={(event) => { setAlbumId(event.target.value); setAdded(false); }}
+        className={`${inputClass} w-auto`}>
+        <option value="">Add to album…</option>
+        {editable.map((album) => <option key={album.id} value={album.id}>{album.title}</option>)}
+      </select>
+      <Button variant="secondary" disabled={!albumId || add.isPending}
+        onClick={() => add.mutate({ albumId, memoryIds: [memoryId] }, { onSuccess: () => setAdded(true) })}>
+        Add
+      </Button>
+      {added && <span role="status" className="text-sm text-emerald-700 dark:text-emerald-400">Added</span>}
+      <ErrorNotice error={add.error} />
+    </div>
   );
 }
 

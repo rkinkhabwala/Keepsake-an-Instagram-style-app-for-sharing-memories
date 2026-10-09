@@ -39,6 +39,21 @@ describe('ProfilePage', () => {
     expect(await screen.findByText(/only for you/)).toBeInTheDocument();
   });
 
+  it('blocks after confirmation and leaves the profile', async () => {
+    const api = fakeApi();
+    signedIn(api);
+    api.on('GET', '/api/users/bo', profile({}));
+    api.on('GET', /\/api\/users\/bo\/memories/, { items: [], nextCursor: null });
+    api.on('PUT', '/api/blocks/u-bo', null, 204);
+    vi.stubGlobal('confirm', () => true);
+    renderApp(<ProfilePage />, { route: '/u/bo', path: '/u/:username' });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Block' }));
+
+    expect(await screen.findByText('Navigated away')).toBeInTheDocument();
+    expect(api.calls.some((call) => call.method === 'PUT' && call.path === '/api/blocks/u-bo')).toBe(true);
+  });
+
   it('follows a public account', async () => {
     const api = fakeApi();
     signedIn(api);

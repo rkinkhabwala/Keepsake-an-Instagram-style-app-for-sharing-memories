@@ -1,8 +1,26 @@
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { useFeed } from '../api/queries';
+import { useFeed, useOnThisDay } from '../api/queries';
 import { MemoryCard } from '../components/MemoryCard';
 import { ErrorNotice, LoadMore, Spinner } from '../components/ui';
+import { todayIso } from '../lib/format';
+
+/** A nudge at the top of the feed when there is something to look back on today. */
+function OnThisDayCard() {
+  const onThisDay = useOnThisDay(todayIso());
+  const years = onThisDay.data?.years ?? [];
+  if (years.length === 0) return null;
+  const count = years.reduce((total, year) => total + year.memories.length, 0);
+  return (
+    <Link
+      to="/on-this-day"
+      className="mx-3 block rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100 sm:mx-0"
+    >
+      <span className="font-semibold">On this day</span> · {count === 1 ? '1 memory' : `${count} memories`} from
+      earlier years →
+    </Link>
+  );
+}
 
 export function FeedPage() {
   const feed = useFeed();
@@ -16,7 +34,8 @@ export function FeedPage() {
 
   const memories = feed.data.pages.flatMap((page) => page.items);
   return (
-    <div className="mx-auto max-w-[470px] space-y-4 sm:pt-4">
+    <div className="mx-auto max-w-[470px] space-y-4 pt-3 sm:pt-4">
+      <OnThisDayCard />
       {memories.length === 0 ? (
         <div className="px-6 py-16 text-center">
           <h1 className="text-lg font-semibold">Nothing here yet</h1>

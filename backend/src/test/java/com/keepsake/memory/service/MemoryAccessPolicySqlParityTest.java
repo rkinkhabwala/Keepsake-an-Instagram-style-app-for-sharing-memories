@@ -9,6 +9,7 @@ import com.keepsake.memory.repository.MemoryRepository;
 import com.keepsake.support.IntegrationTestBase;
 import com.keepsake.user.entity.FollowStatus;
 import com.keepsake.user.entity.User;
+import com.keepsake.user.repository.BlockRepository;
 import com.keepsake.user.repository.CloseFriendRepository;
 import com.keepsake.user.repository.FollowRepository;
 import com.keepsake.user.repository.UserRepository;
@@ -22,8 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Proves {@link MemoryAccessPolicy#VISIBLE_TO_VIEWER_SQL} (used by every list query) makes the same decision as
- * {@link MemoryAccessPolicy#decide} for every combination of author privacy, viewer relation, visibility, status,
- * and deletion, including the author viewing their own memories.
+ * {@link MemoryAccessPolicy#decide} for every combination of author privacy, viewer relation (follow, close friend,
+ * and block in either direction), visibility, status, and deletion, including the author viewing their own memories.
  */
 @Transactional
 class MemoryAccessPolicySqlParityTest extends IntegrationTestBase {
@@ -48,6 +49,13 @@ class MemoryAccessPolicySqlParityTest extends IntegrationTestBase {
     @Autowired
     MemoryRepository memoryRepository;
 
+    @Autowired
+    BlockRepository blockRepository;
+
+    /** No block, the viewer blocked the author, or the author blocked the viewer. */
+    private static final List<boolean[]> BLOCKS = List.of(
+            new boolean[] {false, false}, new boolean[] {true, false}, new boolean[] {false, true});
+
     @Test
     void sqlPredicateMatchesPolicyForEveryCombination() {
         int checked = 0;
@@ -64,9 +72,12 @@ class MemoryAccessPolicySqlParityTest extends IntegrationTestBase {
                 checked++;
             }
 
-            for (int index = 0; index < RELATIONS.size(); index++) {
-                ViewerRelation relation = RELATIONS.get(index);
-                User viewer = user("parity_viewer_" + authorPrivate + "_" + index, false);
+            int viewerNumber = 0;
+            for (ViewerRelation base : RELATIONS) {
+              for (boolean[] block : BLOCKS) {
+                ViewerRelation relation =
+                        new ViewerRelation(base.followStatus(), base.closeFriend(), block[0], block[1]);
+                User viewer = user("parity_viewer_" + authorPrivate + "_" + viewerNumber++, false);
                 relate(viewer, author, relation);
                 for (Memory memory : memories) {
                     MemoryAccessSubject subject = new MemoryAccessSubject(author.getId(), authorPrivate,
@@ -76,9 +87,11 @@ class MemoryAccessPolicySqlParityTest extends IntegrationTestBase {
                             .isEqualTo(MemoryAccessPolicy.decide(viewer.getId(), subject, relation));
                     checked++;
                 }
+              }
             }
         }
-        assertThat(checked).isEqualTo(2 * 7 * 4 * 3 * 2);
+        // 2 author types x (author + 6 relations x 3 block states) x 4 visibilities x 3 statuses x 2 deleted states
+        assertThat(checked).isEqualTo(2 * (1 + 6 * 3) * 4 * 3 * 2);
     }
 
     private List<Memory> memoriesCoveringEveryVisibilityStatusAndDeletion(User author) {
@@ -105,6 +118,12 @@ class MemoryAccessPolicySqlParityTest extends IntegrationTestBase {
         }
         if (relation.closeFriend()) {
             closeFriendRepository.insertIfAbsent(author.getId(), viewer.getId());
+        }
+        if (relation.viewerBlockedAuthor()) {
+            blockRepository.insertIfAbsent(viewer.getId(), author.getId());
+        }
+        if (relation.authorBlockedViewer()) {
+            blockRepository.insertIfAbsent(author.getId(), viewer.getId());
         }
     }
 

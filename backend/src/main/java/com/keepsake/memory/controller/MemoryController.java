@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.keepsake.auth.service.RateLimitService;
 import com.keepsake.memory.dto.CreateMemoryRequest;
+import com.keepsake.memory.dto.MapMemoriesDto;
 import com.keepsake.memory.dto.MemoryDto;
 import com.keepsake.memory.dto.MemoryStatusDto;
 import com.keepsake.memory.dto.UpdateMemoryRequest;
+import com.keepsake.memory.service.MemoryListService;
 import com.keepsake.memory.service.MemoryService;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -27,11 +30,24 @@ public class MemoryController {
     private final MemoryService memoryService;
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
+    private final MemoryListService memoryListService;
 
-    public MemoryController(MemoryService memoryService, RateLimitService rateLimitService, ObjectMapper objectMapper) {
+    public MemoryController(
+            MemoryService memoryService,
+            RateLimitService rateLimitService,
+            ObjectMapper objectMapper,
+            MemoryListService memoryListService
+    ) {
         this.memoryService = memoryService;
         this.rateLimitService = rateLimitService;
         this.objectMapper = objectMapper;
+        this.memoryListService = memoryListService;
+    }
+
+    /** Memories inside a map viewport; bbox is minLng,minLat,maxLng,maxLat. */
+    @GetMapping("/map")
+    public MapMemoriesDto map(@AuthenticationPrincipal UUID viewerId, @RequestParam(required = false) String bbox) {
+        return memoryListService.map(viewerId, bbox);
     }
 
     @PostMapping

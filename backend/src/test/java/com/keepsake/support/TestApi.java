@@ -85,6 +85,19 @@ public class TestApi {
                 .andExpect(status().isNoContent());
     }
 
+    public void block(TestUser blocker, TestUser blocked) throws Exception {
+        mockMvc.perform(as(blocker, put("/api/blocks/" + blocked.id()))).andExpect(status().isNoContent());
+    }
+
+    /** Creates a READY memory with the given visibility and tagged usernames. */
+    public UUID createReadyMemory(TestUser author, String visibility, List<String> tagged) throws Exception {
+        UUID uploadId = upload(author, "image/jpeg", TestImages.jpeg(32, 32));
+        UUID memoryId = createMemory(author, List.of(uploadId),
+                Map.of("visibility", visibility, "taggedUsernames", tagged));
+        awaitStatus(author, memoryId, "READY");
+        return memoryId;
+    }
+
     /** Requests an upload URL and PUTs the bytes to storage, as the web client does. */
     public UUID upload(TestUser owner, String contentType, byte[] bytes) throws Exception {
         UUID uploadId = requestUpload(owner, contentType, bytes.length);

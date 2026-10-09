@@ -9,6 +9,7 @@ import com.keepsake.media.service.MediaUploadService;
 import com.keepsake.user.dto.MeDto;
 import com.keepsake.user.dto.UpdateProfileRequest;
 import com.keepsake.user.entity.User;
+import com.keepsake.user.repository.BlockRepository;
 import com.keepsake.user.repository.FollowRepository;
 import com.keepsake.user.repository.UserRepository;
 import java.util.List;
@@ -27,6 +28,7 @@ public class UserService {
     private final MediaUploadRepository uploadRepository;
     private final ApplicationEventPublisher events;
     private final FollowRepository followRepository;
+    private final BlockRepository blockRepository;
 
     public UserService(
             UserRepository userRepository,
@@ -34,7 +36,8 @@ public class UserService {
             MediaUploadService uploadService,
             MediaUploadRepository uploadRepository,
             ApplicationEventPublisher events,
-            FollowRepository followRepository
+            FollowRepository followRepository,
+            BlockRepository blockRepository
     ) {
         this.userRepository = userRepository;
         this.userSummaries = userSummaries;
@@ -42,6 +45,7 @@ public class UserService {
         this.uploadRepository = uploadRepository;
         this.events = events;
         this.followRepository = followRepository;
+        this.blockRepository = blockRepository;
     }
 
     @Transactional(readOnly = true)
@@ -96,6 +100,27 @@ public class UserService {
     public User requireByUsername(String username) {
         return userRepository.findByUsername(username.toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    /**
+     * A user as seen by {@code viewerId}: when either has blocked the other, the user does not exist for the
+     * viewer (404), so a block is never revealed.
+     */
+    @Transactional(readOnly = true)
+    public User requireViewableByUsername(UUID viewerId, String username) {
+        return viewable(viewerId, requireByUsername(username));
+    }
+
+    @Transactional(readOnly = true)
+    public User requireViewableById(UUID viewerId, UUID userId) {
+        return viewable(viewerId, requireById(userId));
+    }
+
+    private User viewable(UUID viewerId, User user) {
+        if (!user.getId().equals(viewerId) && blockRepository.existsBetween(viewerId, user.getId())) {
+            throw new NotFoundException("User not found");
+        }
+        return user;
     }
 
     @Transactional(readOnly = true)
