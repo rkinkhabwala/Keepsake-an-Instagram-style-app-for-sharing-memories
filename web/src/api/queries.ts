@@ -12,6 +12,7 @@ import type {
   GridItem,
   Me,
   Memory,
+  OnThisDay,
   Page,
   Profile,
   Relationship,
@@ -33,6 +34,7 @@ export const keys = {
   blocks: ['blocks'] as const,
   hashtag: (tag: string) => ['hashtag', tag] as const,
   search: (query: string) => ['search', query] as const,
+  onThisDay: (date: string) => ['on-this-day', date] as const,
 };
 
 export type GridTab = 'memories' | 'tagged' | 'saved';
@@ -60,6 +62,14 @@ export function useFeed() {
 export function useGrid(username: string, tab: GridTab, enabled = true) {
   const path = tab === 'saved' ? '/api/saved' : `/api/users/${username}/${tab === 'memories' ? 'memories' : 'tagged'}`;
   return useInfiniteQuery({ queryKey: keys.grid(username, tab), enabled, ...infinitePage<GridItem>(path, 30) });
+}
+
+/** @param date the viewer's local date, so "today" follows their calendar rather than the server's */
+export function useOnThisDay(date: string) {
+  return useQuery({
+    queryKey: keys.onThisDay(date),
+    queryFn: () => api<OnThisDay>(`/api/resurface/on-this-day?date=${date}`),
+  });
 }
 
 export function useSearch(query: string) {

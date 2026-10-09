@@ -100,6 +100,17 @@ export interface GridItem {
   occurredOn: string;
 }
 
+export interface OnThisDayYear {
+  year: number;
+  yearsAgo: number;
+  memories: GridItem[];
+}
+
+export interface OnThisDay {
+  date: string;
+  years: OnThisDayYear[];
+}
+
 export interface UploadSlot {
   uploadId: string;
   url: string;
