@@ -30,7 +30,7 @@ public class ProfileService {
     /** Profile header info is visible to every signed-in user, including for private accounts. */
     @Transactional(readOnly = true)
     public ProfileDto profile(UUID viewerId, String username) {
-        User user = userService.requireByUsername(username);
+        User user = userService.requireViewableByUsername(viewerId, username);
         return new ProfileDto(
                 user.getId(),
                 user.getUsername(),

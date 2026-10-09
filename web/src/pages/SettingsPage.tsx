@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, api } from '../api/client';
 import {
   useAnswerFollowRequest,
+  useBlock,
+  useBlocks,
   useCloseFriends,
   useCloseFriendToggle,
   useFollowRequests,
@@ -28,6 +30,7 @@ export function SettingsPage() {
       <ThemePicker />
       <FollowRequests />
       <CloseFriends username={me.data.username} />
+      <BlockedAccounts />
       <Button variant="secondary" onClick={() => logout()}>Log out</Button>
       <DeleteAccount />
     </div>
@@ -141,6 +144,39 @@ function FollowRequests() {
         </ul>
       )}
       <ErrorNotice error={answer.error} />
+    </section>
+  );
+}
+
+function BlockedAccounts() {
+  const blocks = useBlocks();
+  const unblock = useBlock();
+  const people = blocks.data?.pages.flatMap((page) => page.items) ?? [];
+  return (
+    <section className="space-y-3" aria-labelledby="blocked-heading">
+      <h2 id="blocked-heading" className="text-lg font-semibold">Blocked accounts</h2>
+      {blocks.isPending ? (
+        <Spinner />
+      ) : people.length === 0 ? (
+        <p className="text-sm text-stone-500 dark:text-stone-400">You haven’t blocked anyone.</p>
+      ) : (
+        <ul className="space-y-3">
+          {people.map((person) => (
+            <li key={person.id} className="flex items-center gap-3">
+              <Avatar user={person} size="sm" />
+              <span className="flex-1 text-sm font-semibold">{person.username}</span>
+              <Button variant="secondary" disabled={unblock.isPending}
+                onClick={() => unblock.mutate({ userId: person.id, block: false })}>
+                Unblock
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-stone-500 dark:text-stone-400">
+        Unblocking doesn’t restore follows, close friends, or tags that blocking removed.
+      </p>
+      <ErrorNotice error={unblock.error} />
     </section>
   );
 }

@@ -35,7 +35,7 @@ public class CommentAssembler {
 
     /** The latest two top-level comments per memory, oldest first, keyed by memory id. */
     public Map<UUID, List<CommentDto>> previews(UUID viewerId, Map<UUID, UUID> memoryAuthors) {
-        List<Comment> comments = commentRepository.findPreviewComments(memoryAuthors.keySet());
+        List<Comment> comments = commentRepository.findPreviewComments(memoryAuthors.keySet(), viewerId);
         Map<UUID, UserSummaryDto> authors = authors(comments);
         return comments.stream().collect(Collectors.groupingBy(Comment::getMemoryId, Collectors.mapping(
                 comment -> toDto(comment, viewerId, memoryAuthors.get(comment.getMemoryId()), authors, List.of()),
@@ -47,7 +47,7 @@ public class CommentAssembler {
         if (topLevel.isEmpty()) {
             return List.of();
         }
-        List<Comment> replies = commentRepository.findLiveReplies(topLevel.stream().map(Comment::getId).toList());
+        List<Comment> replies = commentRepository.findLiveReplies(topLevel.stream().map(Comment::getId).toList(), viewerId);
         Map<UUID, UserSummaryDto> authors = authors(Stream.concat(topLevel.stream(), replies.stream()).toList());
         Map<UUID, List<CommentDto>> repliesByParent = replies.stream().collect(Collectors.groupingBy(
                 Comment::getParentId,

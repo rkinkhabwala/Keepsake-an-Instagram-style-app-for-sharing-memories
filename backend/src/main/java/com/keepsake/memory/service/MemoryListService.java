@@ -43,7 +43,7 @@ public class MemoryListService {
 
     @Transactional(readOnly = true)
     public CursorPage<MemoryGridItemDto> grid(UUID viewerId, String username, CursorPageRequest page) {
-        User author = userService.requireByUsername(username);
+        User author = userService.requireViewableByUsername(viewerId, username);
         return page(memoryRepository.findByAuthorVisibleTo(author.getId(), viewerId, page.cursorOrMax(),
                 page.limit() + 1), page, assembler::toGridItems);
     }
@@ -51,7 +51,7 @@ public class MemoryListService {
     /** The "Tagged" profile tab: memories the user was tagged in, limited to those the viewer may see. */
     @Transactional(readOnly = true)
     public CursorPage<MemoryGridItemDto> tagged(UUID viewerId, String username, CursorPageRequest page) {
-        User tagged = userService.requireByUsername(username);
+        User tagged = userService.requireViewableByUsername(viewerId, username);
         return page(memoryRepository.findTaggedVisibleTo(tagged.getId(), viewerId, page.cursorOrMax(),
                 page.limit() + 1), page, assembler::toGridItems);
     }

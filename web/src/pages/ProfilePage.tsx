@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { type GridTab, useFollow, useGrid, useProfile } from '../api/queries';
+import { type GridTab, useBlock, useFollow, useGrid, useProfile } from '../api/queries';
 import type { Profile } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { MemoryGrid } from '../components/MemoryGrid';
@@ -46,7 +46,10 @@ function ProfileView({ profile }: { profile: Profile }) {
                 Edit profile
               </Link>
             ) : (
-              <FollowButton profile={profile} />
+              <>
+                <FollowButton profile={profile} />
+                <BlockButton profile={profile} />
+              </>
             )}
           </div>
           <ul className="flex gap-5 text-sm">
@@ -114,6 +117,30 @@ function ProfileGrid({ username, tab }: { username: string; tab: GridTab }) {
     <div role="tabpanel">
       <MemoryGrid items={grid.data.pages.flatMap((page) => page.items)} hasMore={!!hasNextPage} onLoadMore={loadMore} empty={EMPTY[tab]} />
     </div>
+  );
+}
+
+function BlockButton({ profile }: { profile: Profile }) {
+  const block = useBlock();
+  const navigate = useNavigate();
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="text-red-600"
+        disabled={block.isPending}
+        onClick={() => {
+          const confirmed = window.confirm(
+            `Block @${profile.username}? You won't see each other's memories, profiles, or comments, and any follows, ` +
+              'close-friend entries, and tags between you are removed. Unblocking later does not restore them.',
+          );
+          if (confirmed) block.mutate({ userId: profile.id, block: true }, { onSuccess: () => navigate('/') });
+        }}
+      >
+        Block
+      </Button>
+      <ErrorNotice error={block.error} />
+    </>
   );
 }
 

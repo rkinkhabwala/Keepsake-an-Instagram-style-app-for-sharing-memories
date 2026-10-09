@@ -30,6 +30,7 @@ export const keys = {
   users: (username: string, list: 'followers' | 'following') => ['users', username, list] as const,
   followRequests: ['follow-requests'] as const,
   closeFriends: ['close-friends'] as const,
+  blocks: ['blocks'] as const,
 };
 
 export type GridTab = 'memories' | 'tagged' | 'saved';
@@ -204,6 +205,28 @@ export function useCloseFriendToggle() {
         return { ...data, pages };
       }),
     onSettled: () => client.invalidateQueries({ queryKey: keys.closeFriends }),
+  });
+}
+
+export function useBlocks() {
+  return useInfiniteQuery({ queryKey: keys.blocks, ...infinitePage<UserSummary>('/api/blocks') });
+}
+
+/**
+ * Blocks or unblocks a user. Blocking removes follows, requests, close friends, and tags between the two, so
+ * almost everything cached may be stale afterwards.
+ */
+export function useBlock() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, block }: { userId: string; block: boolean }) =>
+      api<void>(`/api/blocks/${userId}`, { method: block ? 'PUT' : 'DELETE' }),
+    onSuccess: (_data, { block }) => {
+      if (block) {
+        client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'me' });
+      }
+      client.invalidateQueries({ queryKey: keys.blocks });
+    },
   });
 }
 

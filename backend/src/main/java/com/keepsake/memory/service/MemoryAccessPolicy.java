@@ -2,6 +2,8 @@ package com.keepsake.memory.service;
 
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.memory.entity.MemoryStatus;
+import com.keepsake.user.entity.BlockId;
+import com.keepsake.user.repository.BlockRepository;
 import com.keepsake.user.service.CloseFriendService;
 import com.keepsake.user.service.FollowService;
 import java.util.UUID;
@@ -18,7 +20,8 @@ import org.springframework.stereotype.Component;
  *   <li>CLOSE_FRIENDS: V is in A's close friends or V == A</li>
  *   <li>ONLY_ME: V == A</li>
  * </ul>
- * A PENDING follow request grants nothing.
+ * A PENDING follow request grants nothing. A block in either direction between V and A hides every memory of A from
+ * V (and of V from A), whatever its visibility or the follow and close-friend state.
  *
  * <p>Lists (feed, grid, tagged) only ever show memories passing {@link #canView}. Opening a single memory
  * ({@link #canOpen}) additionally lets the author see their own PROCESSING or FAILED memory, so they can follow
@@ -36,6 +39,12 @@ public class MemoryAccessPolicy {
     public static final String VISIBLE_TO_VIEWER_SQL = """
             (m.status = 'READY' AND m.deleted_at IS NULL AND (
                 m.author_id = :viewerId
+                OR NOT EXISTS (
+                    SELECT 1 FROM blocks vb
+                    WHERE (vb.blocker_id = :viewerId AND vb.blocked_id = m.author_id)
+                       OR (vb.blocker_id = m.author_id AND vb.blocked_id = :viewerId))
+            ) AND (
+                m.author_id = :viewerId
                 OR (m.visibility = 'PUBLIC' AND (a.is_private = FALSE OR EXISTS (
                     SELECT 1 FROM follows vf WHERE vf.follower_id = :viewerId
                         AND vf.followee_id = m.author_id AND vf.status = 'ACCEPTED')))
@@ -48,10 +57,16 @@ public class MemoryAccessPolicy {
 
     private final FollowService followService;
     private final CloseFriendService closeFriendService;
+    private final BlockRepository blockRepository;
 
-    public MemoryAccessPolicy(FollowService followService, CloseFriendService closeFriendService) {
+    public MemoryAccessPolicy(
+            FollowService followService,
+            CloseFriendService closeFriendService,
+            BlockRepository blockRepository
+    ) {
         this.followService = followService;
         this.closeFriendService = closeFriendService;
+        this.blockRepository = blockRepository;
     }
 
     public boolean canView(UUID viewerId, MemoryAccessSubject memory) {
@@ -99,6 +114,9 @@ public class MemoryAccessPolicy {
             return false;
         }
         boolean self = memory.authorId().equals(viewerId);
+        if (!self && relation.blocked()) {
+            return false;
+        }
         return switch (memory.visibility()) {
             case PUBLIC -> !memory.authorPrivate() || relation.acceptedFollower() || self;
             case FOLLOWERS -> relation.acceptedFollower() || self;
@@ -110,6 +128,8 @@ public class MemoryAccessPolicy {
     private ViewerRelation relationOf(UUID viewerId, UUID authorId) {
         return new ViewerRelation(
                 followService.followStatus(viewerId, authorId).orElse(null),
-                closeFriendService.isCloseFriend(authorId, viewerId));
+                closeFriendService.isCloseFriend(authorId, viewerId),
+                blockRepository.existsById(new BlockId(viewerId, authorId)),
+                blockRepository.existsById(new BlockId(authorId, viewerId)));
     }
 }

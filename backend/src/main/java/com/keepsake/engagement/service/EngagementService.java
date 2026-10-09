@@ -89,7 +89,7 @@ public class EngagementService {
     public CursorPage<CommentDto> comments(UUID viewerId, UUID memoryId, CursorPageRequest page) {
         Memory memory = memoryService.requireVisible(viewerId, memoryId);
         UUID cursor = page.cursor() == null ? MIN_UUID : page.cursor();
-        List<Comment> rows = commentRepository.findTopLevel(memoryId, cursor, Limit.of(page.limit() + 1));
+        List<Comment> rows = commentRepository.findTopLevel(memoryId, viewerId, cursor, Limit.of(page.limit() + 1));
         CursorPage<Comment> topLevel = CursorPage.fromLookahead(rows, page.limit(), Comment::getId);
         return new CursorPage<>(commentAssembler.threads(viewerId, memory.getAuthorId(), topLevel.items()),
                 topLevel.nextCursor());

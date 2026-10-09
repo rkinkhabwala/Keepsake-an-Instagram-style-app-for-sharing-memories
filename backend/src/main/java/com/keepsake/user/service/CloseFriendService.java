@@ -32,7 +32,7 @@ public class CloseFriendService {
         if (ownerId.equals(friendId)) {
             throw new InvalidRequestException("You cannot add yourself to close friends");
         }
-        userService.requireById(friendId);
+        userService.requireViewableById(ownerId, friendId);
         closeFriendRepository.insertIfAbsent(ownerId, friendId);
     }
 

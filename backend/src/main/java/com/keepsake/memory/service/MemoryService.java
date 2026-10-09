@@ -264,7 +264,8 @@ public class MemoryService {
         for (String username : distinct) {
             User user;
             try {
-                user = userService.requireByUsername(username);
+                // Someone in a block with the author is as unknown to them as a username that does not exist.
+                user = userService.requireViewableByUsername(authorId, username);
             } catch (NotFoundException missing) {
                 throw new InvalidRequestException("Unknown user @" + username);
             }
