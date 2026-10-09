@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
@@ -25,11 +27,14 @@ public class ImageDecoder {
     /** Decode at no less than twice the display size, then let the resizer do a quality downscale. */
     private static final int SUBSAMPLE_TARGET_EDGE = ImageRenditions.DISPLAY_LONG_EDGE * 2;
     private static final long HEIF_TIMEOUT_SECONDS = 60;
+    private static final Pattern HEIF_IMAGE_SIZE = Pattern.compile("(?m)^image: (\\d+)x(\\d+)");
 
     private final String heifDecoder;
+    private final String heifInfo;
 
     public ImageDecoder(MediaProperties properties) {
         this.heifDecoder = properties.heifDecoder();
+        this.heifInfo = properties.heifInfo();
     }
 
     /**
@@ -50,9 +55,7 @@ public class ImageDecoder {
                 reader.setInput(input, true, true);
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
-                if ((long) width * height > MAX_PIXELS) {
-                    throw new MediaProcessingException("Image is too large (over 60 megapixels)");
-                }
+                checkPixels((long) width * height);
                 ImageReadParam param = reader.getDefaultReadParam();
                 int subsample = Math.max(1, Math.max(width, height) / SUBSAMPLE_TARGET_EDGE);
                 param.setSourceSubsampling(subsample, subsample, 0, 0);
@@ -81,6 +84,9 @@ public class ImageDecoder {
         try {
             directory = Files.createTempDirectory("keepsake-heif-");
             Path input = Files.write(directory.resolve("input.heic"), bytes);
+            // Check the size from the header first: decoding a decompression bomb would cost the CPU, disk, and
+            // memory the pixel limit exists to protect.
+            checkPixels(heifImageArea(input));
             Path output = directory.resolve("output.png");
             Process process = new ProcessBuilder(heifDecoder, input.toString(), output.toString())
                     .redirectErrorStream(true)
@@ -101,6 +107,38 @@ public class ImageDecoder {
             throw new MediaProcessingException("HEIC conversion was interrupted", exception);
         } finally {
             deleteQuietly(directory);
+        }
+    }
+
+    /** The largest image area libheif reports for the file, read from its header without decoding pixels. */
+    private long heifImageArea(Path input) throws MediaProcessingException, IOException, InterruptedException {
+        Process process = new ProcessBuilder(heifInfo, input.toString()).redirectErrorStream(true).start();
+        byte[] output = process.getInputStream().readNBytes(64 * 1024);
+        if (!process.waitFor(HEIF_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new MediaProcessingException("HEIC inspection timed out");
+        }
+        if (process.exitValue() != 0) {
+            throw new MediaProcessingException("HEIC image could not be decoded");
+        }
+        return largestArea(new String(output, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    static long largestArea(String heifInfoOutput) throws MediaProcessingException {
+        Matcher matcher = HEIF_IMAGE_SIZE.matcher(heifInfoOutput);
+        long largest = -1;
+        while (matcher.find()) {
+            largest = Math.max(largest, Long.parseLong(matcher.group(1)) * Long.parseLong(matcher.group(2)));
+        }
+        if (largest < 0) {
+            throw new MediaProcessingException("HEIC image size could not be read");
+        }
+        return largest;
+    }
+
+    private static void checkPixels(long area) throws MediaProcessingException {
+        if (area > MAX_PIXELS) {
+            throw new MediaProcessingException("Image is too large (over 60 megapixels)");
         }
     }
 

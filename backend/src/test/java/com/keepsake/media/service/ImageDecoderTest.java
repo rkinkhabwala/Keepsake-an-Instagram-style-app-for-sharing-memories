@@ -69,7 +69,7 @@ class ImageDecoderTest {
 
     @Test
     void decodesJpegAndAppliesOrientation() throws Exception {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused"));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
 
         BufferedImage image = decoder.decode(TestImages.jpeg(40, 20), ImageType.JPEG, 6);
 
@@ -79,7 +79,7 @@ class ImageDecoderTest {
 
     @Test
     void rejectsImagesOverThePixelLimitBeforeDecodingPixels() {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused"));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
 
         assertThatThrownBy(() -> decoder.decode(pngHeaderOnly(10_000, 10_000), ImageType.PNG, 1))
                 .isInstanceOf(MediaProcessingException.class)
@@ -88,7 +88,7 @@ class ImageDecoderTest {
 
     @Test
     void rejectsCorruptImages() {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused"));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
         byte[] truncated = java.util.Arrays.copyOf(TestImages.jpeg(64, 64), 20);
 
         assertThatThrownBy(() -> decoder.decode(truncated, ImageType.JPEG, 1))
@@ -99,7 +99,7 @@ class ImageDecoderTest {
     void decodesHeicThroughConfiguredDecoderWithoutReapplyingOrientation() throws Exception {
         Path png = Files.write(tempDir.resolve("decoded.png"), TestImages.png(30, 10));
         Path script = executable("heif-dec-stub", "#!/bin/sh\ncp '" + png + "' \"$2\"\n");
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString()));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null));
 
         BufferedImage image = decoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 6);
 
@@ -110,11 +110,44 @@ class ImageDecoderTest {
     @Test
     void reportsHeicDecoderFailure() throws Exception {
         Path script = executable("heif-dec-failing", "#!/bin/sh\nexit 1\n");
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString()));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null));
 
         assertThatThrownBy(() -> decoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 1))
                 .isInstanceOf(MediaProcessingException.class)
                 .hasMessage("HEIC image could not be decoded");
+    }
+
+    @Test
+    void rejectsOversizedHeicFromItsHeaderWithoutDecodingIt() throws Exception {
+        Path decoded = tempDir.resolve("decoder-ran");
+        Path decoder = executable("heif-dec-spy", "#!/bin/sh\ntouch '" + decoded + "'\n");
+        ImageDecoder imageDecoder = new ImageDecoder(
+                new MediaProperties(decoder.toString(), heifInfo(30_000, 30_000).toString(), null));
+
+        assertThatThrownBy(() -> imageDecoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 1))
+                .isInstanceOf(MediaProcessingException.class)
+                .hasMessageContaining("too large");
+        assertThat(decoded).doesNotExist();
+    }
+
+    @Test
+    void readsTheLargestImageSizeFromHeifInfoOutput() throws Exception {
+        String output = """
+                MIME type: image/heic
+                image: 4032x3024 (id=49), primary
+                  thumbnail: 320x240
+                image: 512x512 (id=1)
+                """;
+
+        assertThat(ImageDecoder.largestArea(output)).isEqualTo(4032L * 3024);
+        assertThatThrownBy(() -> ImageDecoder.largestArea("MIME type: image/heic"))
+                .isInstanceOf(MediaProcessingException.class);
+    }
+
+    /** A stand-in for libheif's heif-info that reports one primary image of the given size. */
+    private Path heifInfo(int width, int height) throws Exception {
+        return executable("heif-info-" + width + "x" + height,
+                "#!/bin/sh\necho 'MIME type: image/heic'\necho 'image: " + width + "x" + height + " (id=1), primary'\n");
     }
 
     private Path executable(String name, String content) throws Exception {

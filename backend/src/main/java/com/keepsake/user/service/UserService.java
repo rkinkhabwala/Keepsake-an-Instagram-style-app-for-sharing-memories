@@ -9,6 +9,7 @@ import com.keepsake.media.service.MediaUploadService;
 import com.keepsake.user.dto.MeDto;
 import com.keepsake.user.dto.UpdateProfileRequest;
 import com.keepsake.user.entity.User;
+import com.keepsake.user.repository.FollowRepository;
 import com.keepsake.user.repository.UserRepository;
 import java.util.List;
 import java.util.Locale;
@@ -25,19 +26,22 @@ public class UserService {
     private final MediaUploadService uploadService;
     private final MediaUploadRepository uploadRepository;
     private final ApplicationEventPublisher events;
+    private final FollowRepository followRepository;
 
     public UserService(
             UserRepository userRepository,
             UserSummaries userSummaries,
             MediaUploadService uploadService,
             MediaUploadRepository uploadRepository,
-            ApplicationEventPublisher events
+            ApplicationEventPublisher events,
+            FollowRepository followRepository
     ) {
         this.userRepository = userRepository;
         this.userSummaries = userSummaries;
         this.uploadService = uploadService;
         this.uploadRepository = uploadRepository;
         this.events = events;
+        this.followRepository = followRepository;
     }
 
     @Transactional(readOnly = true)
@@ -61,18 +65,28 @@ public class UserService {
             bio = trimmed.isEmpty() ? null : trimmed;
         }
         boolean isPrivate = request.isPrivate() == null ? user.isPrivate() : request.isPrivate();
+        if (user.isPrivate() && !isPrivate) {
+            // Going public: anyone still waiting for approval becomes a follower, as they would by following now.
+            followRepository.acceptAllPending(userId);
+        }
         user.updateProfile(displayName, bio, isPrivate);
         if (request.avatarUploadId() != null) {
             uploadService.claimForProcessing(userId, List.of(request.avatarUploadId()));
+            user.requestAvatar(request.avatarUploadId());
             events.publishEvent(new AvatarSubmitted(userId, request.avatarUploadId()));
         }
         return userSummaries.me(userRepository.saveAndFlush(user));
     }
 
-    /** Switches the avatar to a processed upload's square thumb, if the upload is the user's and READY. */
+    /**
+     * Switches the avatar to a processed upload's square thumb, if the upload is the user's, READY, and still the
+     * avatar they most recently asked for (processing can finish out of order).
+     */
     @Transactional
     public void applyAvatar(UUID userId, UUID uploadId) {
-        userRepository.findById(userId).ifPresent(user -> uploadRepository.findById(uploadId)
+        userRepository.findById(userId)
+                .filter(user -> uploadId.equals(user.getAvatarUploadId()))
+                .ifPresent(user -> uploadRepository.findById(uploadId)
                 .filter(upload -> upload.getOwnerId().equals(userId))
                 .filter(upload -> upload.getStatus() == MediaUploadStatus.READY)
                 .ifPresent(upload -> user.setAvatarKey(upload.getThumbKey())));

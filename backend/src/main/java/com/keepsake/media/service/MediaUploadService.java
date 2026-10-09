@@ -115,11 +115,21 @@ public class MediaUploadService {
         return new UploadMetadataDto(exif.takenOn(), exif.latitude(), exif.longitude());
     }
 
-    /** The EXIF date taken of an uploaded original, if it can be read; never fails. */
-    public java.util.Optional<java.time.LocalDate> takenOn(MediaUpload upload) {
+    /** Photo metadata (EXIF, HEIF meta) sits at the start of the file; this is plenty to find the date taken. */
+    private static final int METADATA_PREFIX_BYTES = 1024 * 1024;
+
+    /**
+     * The EXIF date taken of one of the owner's uploaded originals, read from the start of the file only. Best
+     * effort: anything unreadable, missing, or not owned by {@code ownerId} yields empty. Call it outside a
+     * transaction; it does network I/O.
+     */
+    public java.util.Optional<java.time.LocalDate> peekTakenOn(UUID ownerId, UUID uploadId) {
         try {
-            return java.util.Optional.ofNullable(exifReader.read(processor.readOriginal(upload)).takenOn());
-        } catch (MediaProcessingException | RuntimeException exception) {
+            return uploadRepository.findById(uploadId)
+                    .filter(upload -> upload.getOwnerId().equals(ownerId))
+                    .map(upload -> exifReader.read(storage.readPrefix(upload.getOriginalKey(), METADATA_PREFIX_BYTES)))
+                    .map(ExifData::takenOn);
+        } catch (RuntimeException exception) {
             return java.util.Optional.empty();
         }
     }

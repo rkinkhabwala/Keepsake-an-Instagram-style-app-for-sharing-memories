@@ -210,6 +210,15 @@ class EngagementIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(as(saver, get("/api/saved?limit=1&cursor=" + firstPage.get("nextCursor").asText())))
                 .andExpect(jsonPath("$.items[*].id").value(Matchers.contains(newer.toString())));
 
+        // The cursor keeps working after the memory it points at is unsaved.
+        mockMvc.perform(as(saver, delete("/api/memories/" + older + "/save"))).andExpect(status().isNoContent());
+        mockMvc.perform(as(saver, get("/api/saved?limit=1&cursor=" + firstPage.get("nextCursor").asText())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id").value(Matchers.contains(newer.toString())));
+        mockMvc.perform(as(saver, get("/api/saved?cursor=garbage"))).andExpect(status().isBadRequest());
+        mockMvc.perform(as(saver, put("/api/memories/" + older + "/save"))).andExpect(status().isNoContent());
+        assertThat(savedIds(saver, 50)).containsExactly(older.toString(), newer.toString());
+
         // The author hides a saved memory: it drops out of the saved list, and can still be unsaved.
         mockMvc.perform(as(author, patch("/api/memories/" + older))
                         .contentType(MediaType.APPLICATION_JSON)

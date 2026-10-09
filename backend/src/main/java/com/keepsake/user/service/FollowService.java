@@ -39,6 +39,10 @@ public class FollowService {
         }
         FollowStatus status = target.isPrivate() ? FollowStatus.PENDING : FollowStatus.ACCEPTED;
         followRepository.insertIfAbsent(viewerId, target.getId(), status.name());
+        if (!target.isPrivate()) {
+            // A request left over from when the account was private no longer needs approval.
+            followRepository.acceptPending(viewerId, target.getId());
+        }
         return relationship(viewerId, target.getId());
     }
 

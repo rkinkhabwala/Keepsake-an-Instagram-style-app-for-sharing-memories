@@ -14,6 +14,7 @@ import com.keepsake.support.TestApi;
 import com.keepsake.support.TestApi.TestUser;
 import com.keepsake.support.TestImages;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class AvatarIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Autowired
+    com.keepsake.user.service.UserService userService;
 
     TestApi api;
 
@@ -56,6 +60,25 @@ class AvatarIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.items[0].avatarUrl").doesNotExist());
         mockMvc.perform(as(follower, get("/api/users/av_follower/following")))
                 .andExpect(jsonPath("$.items[0].avatarUrl").value(org.hamcrest.Matchers.containsString("thumb/")));
+    }
+
+    @Test
+    void onlyTheMostRecentlyRequestedAvatarIsApplied() throws Exception {
+        TestUser user = api.signup("av_order");
+        UUID first = api.upload(user, "image/png", TestImages.png(50, 50));
+        UUID second = api.upload(user, "image/png", TestImages.png(60, 60));
+        for (UUID uploadId : List.of(first, second)) {
+            mockMvc.perform(as(user, patch("/api/users/me"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"avatarUploadId\":\"" + uploadId + "\"}"))
+                    .andExpect(status().isOk());
+        }
+        TestApi.await(Duration.ofSeconds(30), () -> me(user).get("avatarUrl").asText("").contains(second.toString()));
+
+        // The older request finishing late must not replace the newer avatar.
+        userService.applyAvatar(user.id(), first);
+
+        assertThat(me(user).get("avatarUrl").asText()).contains("thumb/" + second);
     }
 
     @Test

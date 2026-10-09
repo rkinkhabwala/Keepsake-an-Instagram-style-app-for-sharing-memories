@@ -50,5 +50,7 @@ keepsake:
     region: ${KEEPSAKE_S3_REGION:us-east-1}
   media:
     heif-decoder: ${KEEPSAKE_HEIF_DECODER:heif-dec}
+    heif-info: ${KEEPSAKE_HEIF_INFO:heif-info}
+    processing-timeout: ${KEEPSAKE_PROCESSING_TIMEOUT:PT10M}
   seed:
     enabled: ${KEEPSAKE_SEED_ENABLED:false}

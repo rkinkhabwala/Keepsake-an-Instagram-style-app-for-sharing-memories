@@ -28,6 +28,14 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
             """, nativeQuery = true)
     int acceptPending(UUID followerId, UUID followeeId);
 
+    /** Approves every pending request to the user, e.g. when their account becomes public. */
+    @Modifying
+    @Query(value = """
+            UPDATE follows SET status = 'ACCEPTED', updated_at = NOW()
+            WHERE followee_id = :followeeId AND status = 'PENDING'
+            """, nativeQuery = true)
+    int acceptAllPending(UUID followeeId);
+
     @Modifying
     @Query("""
             DELETE FROM Follow f

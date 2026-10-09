@@ -35,6 +35,9 @@ public class User {
     @Column(name = "avatar_key")
     private String avatarKey;
 
+    @Column(name = "avatar_upload_id")
+    private UUID avatarUploadId;
+
     @Column(name = "is_private", nullable = false)
     private boolean isPrivate;
 
@@ -72,6 +75,14 @@ public class User {
     @PreUpdate
     void preUpdate() {
         updatedAt = Instant.now();
+    }
+
+    public void requestAvatar(UUID uploadId) {
+        this.avatarUploadId = uploadId;
+    }
+
+    public UUID getAvatarUploadId() {
+        return avatarUploadId;
     }
 
     public void setAvatarKey(String avatarKey) {

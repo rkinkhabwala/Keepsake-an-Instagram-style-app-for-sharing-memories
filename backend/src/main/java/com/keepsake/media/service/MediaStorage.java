@@ -64,6 +64,12 @@ public class MediaStorage {
         return s3Client.getObjectAsBytes(request -> request.bucket(bucket).key(key)).asByteArray();
     }
 
+    /** The first {@code length} bytes of an object (or all of it, if shorter). */
+    public byte[] readPrefix(String key, int length) {
+        return s3Client.getObjectAsBytes(request -> request.bucket(bucket).key(key).range("bytes=0-" + (length - 1)))
+                .asByteArray();
+    }
+
     public void write(String key, byte[] bytes, String contentType) {
         s3Client.putObject(request -> request.bucket(bucket).key(key).contentType(contentType),
                 RequestBody.fromBytes(bytes));

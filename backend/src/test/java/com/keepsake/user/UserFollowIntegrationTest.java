@@ -31,6 +31,12 @@ class UserFollowIntegrationTest extends IntegrationTestBase {
     @Autowired
     ObjectMapper objectMapper;
 
+    @Autowired
+    com.keepsake.user.repository.FollowRepository followRepository;
+
+    @Autowired
+    org.springframework.transaction.support.TransactionTemplate transactions;
+
     @Test
     void meReturnsAndUpdatesOwnProfile() throws Exception {
         TestUser user = signup("uf_me");
@@ -196,6 +202,35 @@ class UserFollowIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.relationship").value("FOLLOWING"));
         mockMvc.perform(as(follower, get("/api/users/uf_turn_owner/followers")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void goingPublicApprovesPendingRequests() throws Exception {
+        TestUser owner = signup("uf_public_owner");
+        makePrivate(owner);
+        TestUser requester = signup("uf_public_req");
+        follow(requester, "uf_public_owner", "REQUESTED");
+
+        mockMvc.perform(as(owner, patch("/api/users/me"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"isPrivate\":false}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(as(requester, get("/api/users/uf_public_owner")))
+                .andExpect(jsonPath("$.relationship").value("FOLLOWING"))
+                .andExpect(jsonPath("$.followerCount").value(1));
+        mockMvc.perform(as(owner, get("/api/follow-requests"))).andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    @Test
+    void followingAPublicAccountUpgradesALeftoverPendingRequest() throws Exception {
+        TestUser owner = signup("uf_leftover_owner");
+        TestUser requester = signup("uf_leftover_req");
+        // A request recorded while the account was private, e.g. if it raced with the switch to public.
+        transactions.executeWithoutResult(status ->
+                followRepository.insertIfAbsent(requester.id(), owner.id(), "PENDING"));
+
+        follow(requester, "uf_leftover_owner", "FOLLOWING");
     }
 
     @Test

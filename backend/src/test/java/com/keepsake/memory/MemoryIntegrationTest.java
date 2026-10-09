@@ -41,6 +41,12 @@ class MemoryIntegrationTest extends IntegrationTestBase {
     @Autowired
     MemoryRepository memoryRepository;
 
+    @Autowired
+    com.keepsake.memory.service.MemoryService memoryService;
+
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     TestApi api;
 
     @BeforeEach
@@ -112,6 +118,51 @@ class MemoryIntegrationTest extends IntegrationTestBase {
         api.awaitStatus(author, memoryId, "READY");
         mockMvc.perform(as(author, post("/api/memories/" + memoryId + "/retry")))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void memoryStuckInProcessingIsFailedBySweepAndCanBeRetried() throws Exception {
+        TestUser author = api.signup("mem_stuck");
+        UUID memoryId = api.createReadyMemory(author, "PUBLIC");
+        // Simulate processing lost to a restart: memory and upload left PROCESSING, last touched long ago.
+        jdbc.update("UPDATE memories SET status = 'PROCESSING', updated_at = NOW() - INTERVAL '1 hour' WHERE id = ?",
+                memoryId);
+        jdbc.update("UPDATE media_uploads SET status = 'PROCESSING' WHERE id IN "
+                + "(SELECT upload_id FROM memory_media WHERE memory_id = ?)", memoryId);
+        mockMvc.perform(as(author, post("/api/memories/" + memoryId + "/retry"))).andExpect(status().isConflict());
+
+        assertThat(memoryService.failStaleProcessing(java.time.Duration.ofMinutes(10))).isGreaterThanOrEqualTo(1);
+
+        assertThat(api.getMemory(author, memoryId).get("status").asText()).isEqualTo("FAILED");
+        mockMvc.perform(as(author, post("/api/memories/" + memoryId + "/retry"))).andExpect(status().isAccepted());
+        api.awaitStatus(author, memoryId, "READY");
+    }
+
+    @Test
+    void sweepLeavesRecentlyStartedProcessingAlone() throws Exception {
+        TestUser author = api.signup("mem_fresh_processing");
+        UUID memoryId = api.createReadyMemory(author, "PUBLIC");
+        jdbc.update("UPDATE memories SET status = 'PROCESSING', updated_at = NOW() WHERE id = ?", memoryId);
+
+        memoryService.failStaleProcessing(java.time.Duration.ofMinutes(10));
+
+        assertThat(memoryRepository.findById(memoryId).orElseThrow().getStatus().name()).isEqualTo("PROCESSING");
+    }
+
+    @Test
+    void implausibleExifDateFallsBackToToday() throws Exception {
+        TestUser author = api.signup("mem_bad_exif");
+        UUID future = api.upload(author, "image/jpeg",
+                TestImages.jpegWithExif(64, 64, 1, "2099:01:01 10:00:00", 1.0, 1.0));
+        UUID ancient = api.upload(author, "image/jpeg",
+                TestImages.jpegWithExif(64, 64, 1, "1850:06:01 10:00:00", 1.0, 1.0));
+
+        UUID fromFuture = api.createMemory(author, List.of(future), Map.of());
+        UUID fromAncient = api.createMemory(author, List.of(ancient), Map.of());
+
+        String today = LocalDate.now(ZoneOffset.UTC).toString();
+        assertThat(api.getMemory(author, fromFuture).get("occurredOn").asText()).isEqualTo(today);
+        assertThat(api.getMemory(author, fromAncient).get("occurredOn").asText()).isEqualTo(today);
     }
 
     @Test

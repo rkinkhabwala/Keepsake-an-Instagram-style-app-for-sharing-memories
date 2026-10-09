@@ -48,6 +48,6 @@ public class ProfileMemoryController {
             @RequestParam(required = false) String cursor,
             @RequestParam(required = false) Integer limit
     ) {
-        return memoryListService.saved(viewerId, CursorPageRequest.parse(cursor, limit));
+        return memoryListService.saved(viewerId, cursor, limit);
     }
 }

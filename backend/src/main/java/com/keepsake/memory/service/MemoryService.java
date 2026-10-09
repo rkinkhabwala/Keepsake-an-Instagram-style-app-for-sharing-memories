@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class MemoryService {
@@ -54,6 +55,7 @@ public class MemoryService {
     private final MemoryDtoAssembler assembler;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final TransactionTemplate transactions;
 
     public MemoryService(
             MemoryRepository memoryRepository,
@@ -65,7 +67,8 @@ public class MemoryService {
             MemoryAccessPolicy accessPolicy,
             MemoryDtoAssembler assembler,
             ApplicationEventPublisher events,
-            Clock clock
+            Clock clock,
+            TransactionTemplate transactions
     ) {
         this.memoryRepository = memoryRepository;
         this.mediaRepository = mediaRepository;
@@ -77,10 +80,14 @@ public class MemoryService {
         this.assembler = assembler;
         this.events = events;
         this.clock = clock;
+        this.transactions = transactions;
     }
 
-    /** Creates the memory in PROCESSING; its media is processed asynchronously after commit. */
-    @Transactional
+    /**
+     * Creates the memory in PROCESSING; its media is processed asynchronously after commit. When occurredOn is
+     * omitted it defaults to the first photo's EXIF date (if plausible), else today. That date is read before the
+     * transaction starts, so no database connection or row lock is held during storage I/O.
+     */
     public MemoryStatusDto create(UUID authorId, CreateMemoryRequest request) {
         if (request.visibility() == null) {
             throw new InvalidRequestException("visibility is required");
@@ -92,10 +99,25 @@ public class MemoryService {
         String caption = caption(request.caption());
         LocationDto location = location(request.location());
         Set<UUID> tagged = taggedUserIds(authorId, request.taggedUsernames());
-        List<MediaUpload> uploads = uploadService.claimForProcessing(authorId, uploadIds);
         LocalDate occurredOn = request.occurredOn() != null
                 ? validOccurredOn(request.occurredOn())
-                : uploadService.takenOn(uploads.getFirst()).orElse(LocalDate.now(clock));
+                : uploadService.peekTakenOn(authorId, uploadIds.getFirst())
+                        .filter(this::isPlausibleOccurredOn)
+                        .orElse(LocalDate.now(clock));
+        return transactions.execute(status ->
+                insert(authorId, request, uploadIds, caption, location, tagged, occurredOn));
+    }
+
+    private MemoryStatusDto insert(
+            UUID authorId,
+            CreateMemoryRequest request,
+            List<UUID> uploadIds,
+            String caption,
+            LocationDto location,
+            Set<UUID> tagged,
+            LocalDate occurredOn
+    ) {
+        List<MediaUpload> uploads = uploadService.claimForProcessing(authorId, uploadIds);
 
         Memory memory = new Memory(authorId, occurredOn, request.visibility());
         memory.setCaption(caption);
@@ -202,6 +224,19 @@ public class MemoryService {
         memory.setStatus(allReady && !media.isEmpty() ? MemoryStatus.READY : MemoryStatus.FAILED);
     }
 
+    /**
+     * Marks memories that have been PROCESSING for longer than {@code timeout} as FAILED, so their authors can
+     * retry them. Processing can be lost if the server restarts mid-way or the async queue is full.
+     *
+     * @return how many memories were failed
+     */
+    @Transactional
+    public int failStaleProcessing(java.time.Duration timeout) {
+        List<Memory> stale = memoryRepository.findStaleProcessing(clock.instant().minus(timeout));
+        stale.forEach(memory -> memory.setStatus(MemoryStatus.FAILED));
+        return stale.size();
+    }
+
     static MemoryAccessSubject subject(Memory memory, User author) {
         return new MemoryAccessSubject(
                 memory.getAuthorId(),
@@ -288,8 +323,12 @@ public class MemoryService {
     }
 
     /** Allows one day of slack past today so users ahead of UTC can still pick their own today. */
+    private boolean isPlausibleOccurredOn(LocalDate occurredOn) {
+        return !occurredOn.isBefore(EARLIEST_OCCURRED_ON) && !occurredOn.isAfter(LocalDate.now(clock).plusDays(1));
+    }
+
     private LocalDate validOccurredOn(LocalDate occurredOn) {
-        if (occurredOn.isBefore(EARLIEST_OCCURRED_ON) || occurredOn.isAfter(LocalDate.now(clock).plusDays(1))) {
+        if (!isPlausibleOccurredOn(occurredOn)) {
             throw new InvalidRequestException("occurredOn must be between 1900-01-01 and today");
         }
         return occurredOn;

@@ -105,8 +105,24 @@ class FeedAndGridIntegrationTest extends IntegrationTestBase {
         assertThat(feedIds(viewer, 20)).isEmpty();
 
         mockMvc.perform(as(viewer, get("/api/feed?cursor=not-a-uuid"))).andExpect(status().isBadRequest());
-        mockMvc.perform(as(viewer, get("/api/feed?cursor=" + UUID.randomUUID()))).andExpect(status().isBadRequest());
         mockMvc.perform(as(viewer, get("/api/feed?limit=101"))).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cursorsNeverRevealWhetherAHiddenMemoryExists() throws Exception {
+        TestUser viewer = api.signup("feed_oracle_viewer");
+        TestUser stranger = api.signup("feed_oracle_stranger");
+        UUID hidden = api.createReadyMemory(stranger, "ONLY_ME");
+
+        // A hidden memory's id and a made-up id are both just positions: same status, same (empty) result.
+        for (String cursor : List.of(hidden.toString(), UUID.randomUUID().toString())) {
+            mockMvc.perform(as(viewer, get("/api/feed?cursor=" + cursor)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty());
+            mockMvc.perform(as(viewer, get("/api/users/feed_oracle_stranger/memories?cursor=" + cursor)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty());
+        }
     }
 
     @Test
