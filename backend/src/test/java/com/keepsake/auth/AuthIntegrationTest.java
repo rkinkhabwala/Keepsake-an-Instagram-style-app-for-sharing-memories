@@ -172,6 +172,39 @@ class AuthIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void spoofedForwardedForFromNonProxyIsIgnoredForRateLimiting() throws Exception {
+        // A client talking to the backend directly cannot pick a fresh address per attempt.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            badLogin(remoteAddress("198.51.100.40"), "203.0.113." + attempt).andExpect(status().isUnauthorized());
+        }
+        badLogin(remoteAddress("198.51.100.40"), "203.0.113.99").andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void forwardedForFromTrustedProxyIdentifiesEachClient() throws Exception {
+        // Behind the proxy, each real client gets its own limit...
+        for (int client = 0; client < 6; client++) {
+            badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100." + (60 + client)).andExpect(status().isUnauthorized());
+        }
+        // ...and one client cannot exceed it by going through the proxy.
+        for (int attempt = 0; attempt < 4; attempt++) {
+            badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100.60").andExpect(status().isUnauthorized());
+        }
+        badLogin(remoteAddress(TRUSTED_PROXY), "198.51.100.60").andExpect(status().isTooManyRequests());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions badLogin(RequestPostProcessor from, String forwardedFor)
+            throws Exception {
+        return mockMvc.perform(post("/api/auth/login")
+                .with(from)
+                .header("X-Forwarded-For", forwardedFor)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"identifier":"nobody","password":"a-long-enough-password"}
+                        """));
+    }
+
+    @Test
     void logoutRevokesTokenFamilyAndClearsCookie() throws Exception {
         MvcResult signup = signup("logout_user", "logout@example.test", "Logout");
         String refreshToken = cookieValue(signup);

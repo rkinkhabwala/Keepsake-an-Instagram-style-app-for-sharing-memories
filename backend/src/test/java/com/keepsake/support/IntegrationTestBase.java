@@ -17,6 +17,9 @@ import org.testcontainers.utility.DockerImageName;
 @AutoConfigureMockMvc
 public abstract class IntegrationTestBase {
 
+    /** The address tests use to act as the web container's nginx. */
+    protected static final String TRUSTED_PROXY = "192.0.2.250";
+
     protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
     protected static final GenericContainer<?> REDIS =
@@ -43,5 +46,6 @@ public abstract class IntegrationTestBase {
         registry.add("keepsake.s3.public-endpoint", MINIO::getS3URL);
         registry.add("keepsake.s3.access-key", MINIO::getUserName);
         registry.add("keepsake.s3.secret-key", MINIO::getPassword);
+        registry.add("keepsake.trusted-proxies", () -> TRUSTED_PROXY);
     }
 }

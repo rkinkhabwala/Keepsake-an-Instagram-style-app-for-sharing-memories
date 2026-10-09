@@ -20,9 +20,9 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
 server:
   port: ${SERVER_PORT:8080}
-  # Use X-Forwarded-For from trusted internal proxies (the web container's nginx) as the client address, so
-  # per-IP rate limits apply per client rather than to the proxy.
-  forward-headers-strategy: native
+  # Tomcat's own handling would trust X-Forwarded-For from any private address; TrustedProxyFilter trusts it only
+  # from keepsake.trusted-proxies instead.
+  forward-headers-strategy: none
 management:
   endpoints:
     web:
@@ -38,6 +38,8 @@ logging:
       console: logstash
 keepsake:
   web-origin: ${KEEPSAKE_WEB_ORIGIN:http://localhost:5173}
+  # Host names or IPs whose X-Forwarded-For is believed (comma-separated); in Compose, the web container.
+  trusted-proxies: ${KEEPSAKE_TRUSTED_PROXIES:}
   jwt-secret: ${KEEPSAKE_JWT_SECRET:local-development-secret-change-before-deploy-123456}
   auth:
     cookie-secure: ${KEEPSAKE_AUTH_COOKIE_SECURE:false}

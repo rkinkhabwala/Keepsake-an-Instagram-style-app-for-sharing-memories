@@ -53,6 +53,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       KEEPSAKE_WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      KEEPSAKE_TRUSTED_PROXIES: web
       KEEPSAKE_JWT_SECRET: ${JWT_SECRET:-replace-with-a-random-secret-of-at-least-32-characters}
       KEEPSAKE_S3_ENDPOINT: http://minio:9000
       KEEPSAKE_S3_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
@@ -61,7 +62,8 @@ services:
       KEEPSAKE_S3_BUCKET: ${MINIO_BUCKET:-keepsake}
       KEEPSAKE_SEED_ENABLED: ${SEED_DEMO_DATA:-true}
     ports:
-      - "8080:8080"
+      # Reachable from this machine for development, not from the network; browsers go through web.
+      - "127.0.0.1:8080:8080"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
       interval: 5s
