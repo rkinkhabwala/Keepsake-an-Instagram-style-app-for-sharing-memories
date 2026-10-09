@@ -32,7 +32,7 @@ public class MemoryProcessingListener {
     @TransactionalEventListener
     public void onSubmitted(MemoryMediaSubmitted event) {
         try {
-            processingService.processAll(event.uploadIds()).whenComplete((allReady, error) -> {
+            processingService.processAll(event.uploadIds(), java.time.Instant.now()).whenComplete((allReady, error) -> {
                 if (error != null) {
                     log.error("Processing memory {} failed unexpectedly", event.memoryId(), error);
                 }

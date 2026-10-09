@@ -13,6 +13,18 @@ Demo data is opt-in, because every demo account shares a published password. Wit
 
 The API health endpoint is `/actuator/health`. PostgreSQL, Redis, and MinIO data are persisted in named Compose volumes.
 
+## Metrics and dashboards
+
+Prometheus and Grafana run behind the `observability` Compose profile:
+
+```
+docker compose --profile observability up --build
+```
+
+- Grafana: <http://localhost:3000> opens the provisioned **Keepsake overview** dashboard (feed p50/p95 latency, feed request rate, media processing time, and media queue lag). Viewing needs no login; the admin password is `GRAFANA_ADMIN_PASSWORD` from `.env`.
+- Prometheus: <http://localhost:9090>, scraping the backend's `/actuator/prometheus` every 5 seconds.
+- Both are bound to 127.0.0.1. The metrics endpoint is reachable only inside Compose and from this machine.
+
 ## Development checks
 
 - Backend: `cd backend && mvn verify`

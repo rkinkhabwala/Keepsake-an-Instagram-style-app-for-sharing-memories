@@ -8,6 +8,8 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.UUID;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,23 +30,39 @@ public class MediaProcessor {
     private final ExifReader exifReader;
     private final ImageDecoder decoder;
     private final ImageRenditions renditions;
+    private final MeterRegistry meterRegistry;
 
     public MediaProcessor(
             MediaUploadRepository uploadRepository,
             MediaStorage storage,
             ExifReader exifReader,
             ImageDecoder decoder,
-            ImageRenditions renditions
+            ImageRenditions renditions,
+            MeterRegistry meterRegistry
     ) {
         this.uploadRepository = uploadRepository;
         this.storage = storage;
         this.exifReader = exifReader;
         this.decoder = decoder;
         this.renditions = renditions;
+        this.meterRegistry = meterRegistry;
     }
 
-    /** @return true when the upload is READY afterwards; failures are recorded on the upload, never thrown */
+    /**
+     * @return true when the upload is READY afterwards; failures are recorded on the upload, never thrown. Timed as
+     *     {@code keepsake.media.processing} with outcome {@code ready} or {@code failed}.
+     */
     public boolean process(UUID uploadId) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        boolean ready = processUntimed(uploadId);
+        sample.stop(Timer.builder("keepsake.media.processing")
+                .description("Time to verify and render one uploaded image")
+                .tag("outcome", ready ? "ready" : "failed")
+                .register(meterRegistry));
+        return ready;
+    }
+
+    private boolean processUntimed(UUID uploadId) {
         Optional<MediaUpload> found = uploadRepository.findById(uploadId);
         if (found.isEmpty()) {
             log.warn("Media upload {} no longer exists; skipping processing", uploadId);

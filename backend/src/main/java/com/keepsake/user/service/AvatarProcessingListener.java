@@ -18,7 +18,7 @@ public class AvatarProcessingListener {
 
     @TransactionalEventListener
     public void onSubmitted(AvatarSubmitted event) {
-        processingService.processAll(List.of(event.uploadId())).whenComplete((allReady, error) -> {
+        processingService.processAll(List.of(event.uploadId()), java.time.Instant.now()).whenComplete((allReady, error) -> {
             if (Boolean.TRUE.equals(allReady)) {
                 userService.applyAvatar(event.userId(), event.uploadId());
             }

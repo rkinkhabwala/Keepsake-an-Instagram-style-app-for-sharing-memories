@@ -32,6 +32,15 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: keepsake
+    distribution:
+      # Histogram buckets let Prometheus compute p95 (histogram_quantile) across instances and time windows.
+      percentiles-histogram:
+        http.server.requests: true
+        keepsake.media.processing: true
+        keepsake.media.queue.wait: true
 logging:
   structured:
     format:
