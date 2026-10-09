@@ -40,11 +40,14 @@ class DemoSeederIntegrationTest extends IntegrationTestBase {
     @Autowired MemoryRepository memoryRepository;
     @Autowired MemoryMediaRepository mediaRepository;
     @Autowired EngagementService engagementService;
+    @Autowired com.keepsake.album.service.AlbumService albumService;
+    @Autowired com.keepsake.user.service.BlockService blockService;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Test
     void seedsUsersFollowsAndFiftyProcessedMemoriesOnce() {
         DemoSeeder seeder = new DemoSeeder(userRepository, authService, userService, followService, closeFriendService,
-                uploadRepository, storage, memoryService, memoryRepository, engagementService);
+                uploadRepository, storage, memoryService, memoryRepository, engagementService, albumService, blockService);
 
         seeder.seed();
 
@@ -66,6 +69,17 @@ class DemoSeederIntegrationTest extends IntegrationTestBase {
         assertThat(mediaRepository.findByMemoryIdInOrderByPosition(memories.stream().map(Memory::getId).toList()))
                 .allSatisfy(media -> assertThat(media.isReady()).isTrue());
         assertThat(memories.stream().mapToInt(Memory::getLikeCount).sum()).isPositive();
+
+        // Phase 2 demo data: coordinates for the map, hashtags, a leap-day memory, a shared album, and a block.
+        assertThat(memories).filteredOn(memory -> memory.getLat() != null).hasSizeGreaterThan(10);
+        assertThat(memories).anyMatch(memory -> memory.getOccurredOn().equals(java.time.LocalDate.of(2024, 2, 29)));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM memory_hashtags mh JOIN memories m ON m.id = mh.memory_id"
+                + " WHERE m.author_id = ?", Long.class, ana.getId())).isPositive();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM album_memories am JOIN albums al ON al.id = am.album_id"
+                + " WHERE al.owner_id = ?", Long.class, ana.getId())).isEqualTo(7);
+        assertThat(jdbc.queryForObject("SELECT role FROM album_collaborators c JOIN albums al ON al.id = c.album_id"
+                + " WHERE al.owner_id = ?", String.class, ana.getId())).isEqualTo("EDITOR");
+        assertThat(blockService.isBlockedEitherWay(byName(users, "eli").getId(), byName(users, "dev").getId())).isTrue();
 
         // A second run (e.g. a restarted container) leaves the data alone.
         seeder.seed();
