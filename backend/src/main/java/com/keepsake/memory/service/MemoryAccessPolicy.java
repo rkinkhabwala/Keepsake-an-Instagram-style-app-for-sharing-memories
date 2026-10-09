@@ -2,6 +2,7 @@ package com.keepsake.memory.service;
 
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.memory.entity.MemoryStatus;
+import com.keepsake.memory.entity.Visibility;
 import com.keepsake.user.entity.BlockId;
 import com.keepsake.user.repository.BlockRepository;
 import com.keepsake.user.service.CloseFriendService;
@@ -84,6 +85,15 @@ public class MemoryAccessPolicy {
         if (!canView(viewerId, memory)) {
             throw new NotFoundException("Memory not found");
         }
+    }
+
+    /**
+     * The same visibility rule applied to other content an owner shares with a visibility setting (albums): the
+     * §5 table for a READY, non-deleted item, including blocks. Keeps that rule in this one class.
+     */
+    public boolean canViewOwnedContent(UUID viewerId, UUID ownerId, boolean ownerPrivate, Visibility visibility) {
+        return canView(viewerId,
+                new MemoryAccessSubject(ownerId, ownerPrivate, visibility, MemoryStatus.READY, false));
     }
 
     /** Detail access: everything {@link #canView} allows, plus the author's own unfinished memories. */

@@ -100,6 +100,22 @@ export interface GridItem {
   occurredOn: string;
 }
 
+export type AlbumRole = 'OWNER' | 'EDITOR' | 'VIEWER' | 'NONE';
+
+export interface Album {
+  id: string;
+  title: string;
+  description: string | null;
+  visibility: Visibility;
+  owner: UserSummary;
+  viewerRole: AlbumRole;
+  collaborators: { user: UserSummary; role: 'EDITOR' | 'VIEWER' }[];
+  coverThumbUrl: string | null;
+  coverBlurhash: string | null;
+  memoryCount: number;
+  createdAt: string;
+}
+
 export interface MapMemory {
   id: string;
   latitude: number;

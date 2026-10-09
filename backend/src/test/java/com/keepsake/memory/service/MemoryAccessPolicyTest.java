@@ -146,6 +146,20 @@ class MemoryAccessPolicyTest {
         assertThat(policy.canOpen(AUTHOR, publicMemory)).isTrue();
     }
 
+    @Test
+    void ownedContentFollowsTheSameTableIncludingBlocks() {
+        FollowService followService = mock(FollowService.class);
+        BlockRepository blockRepository = mock(BlockRepository.class);
+        when(followService.followStatus(VIEWER, AUTHOR)).thenReturn(Optional.of(FollowStatus.ACCEPTED));
+        MemoryAccessPolicy policy = new MemoryAccessPolicy(followService, mock(CloseFriendService.class), blockRepository);
+
+        assertThat(policy.canViewOwnedContent(VIEWER, AUTHOR, PRIVATE_ACCOUNT, Visibility.FOLLOWERS)).isTrue();
+        assertThat(policy.canViewOwnedContent(VIEWER, AUTHOR, PRIVATE_ACCOUNT, Visibility.CLOSE_FRIENDS)).isFalse();
+        assertThat(policy.canViewOwnedContent(AUTHOR, AUTHOR, PRIVATE_ACCOUNT, Visibility.ONLY_ME)).isTrue();
+        when(blockRepository.existsById(new BlockId(AUTHOR, VIEWER))).thenReturn(true);
+        assertThat(policy.canViewOwnedContent(VIEWER, AUTHOR, PUBLIC_ACCOUNT, Visibility.PUBLIC)).isFalse();
+    }
+
     @ParameterizedTest
     @EnumSource(Visibility.class)
     void authorAlwaysSeesOwnReadyMemoryEvenOnPrivateAccount(Visibility visibility) {

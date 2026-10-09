@@ -4,6 +4,7 @@ import { useAuth } from './auth/AuthContext';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
 import { LoginPage, SignupPage } from './pages/AuthPages';
+import { AlbumPage } from './pages/AlbumPage';
 import { CreateMemoryPage } from './pages/CreateMemoryPage';
 import { FeedPage } from './pages/FeedPage';
 import { HashtagPage } from './pages/HashtagPage';
@@ -58,6 +59,7 @@ export default function App() {
             }
           />
           <Route path="tags/:tag" element={<HashtagPage />} />
+          <Route path="albums/:id" element={<AlbumPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>

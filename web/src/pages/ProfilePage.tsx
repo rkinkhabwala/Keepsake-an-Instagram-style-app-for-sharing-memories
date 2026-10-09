@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { type GridTab, useBlock, useFollow, useGrid, useProfile } from '../api/queries';
 import type { Profile } from '../api/types';
+import { AlbumList } from '../components/AlbumList';
 import { Avatar } from '../components/Avatar';
 import { MemoryGrid } from '../components/MemoryGrid';
 import { Button, ErrorNotice, Spinner } from '../components/ui';
@@ -31,6 +32,7 @@ function ProfileView({ profile }: { profile: Profile }) {
     { id: 'memories', label: 'Memories' },
     { id: 'tagged', label: 'Tagged' },
     ...(own ? [{ id: 'saved' as GridTab, label: 'Saved' }] : []),
+    { id: 'albums', label: 'Albums' },
   ];
   const [tab, setTab] = useState<GridTab>('memories');
 
@@ -92,7 +94,11 @@ function ProfileView({ profile }: { profile: Profile }) {
               </button>
             ))}
           </div>
-          <ProfileGrid username={profile.username} tab={tab} />
+          {tab === 'albums' ? (
+            <AlbumList username={profile.username} own={own} />
+          ) : (
+            <ProfileGrid username={profile.username} tab={tab} />
+          )}
         </>
       )}
     </div>
@@ -100,6 +106,7 @@ function ProfileView({ profile }: { profile: Profile }) {
 }
 
 const EMPTY: Record<GridTab, string> = {
+  albums: '',
   memories: 'No memories yet.',
   tagged: 'No memories with this person tagged yet.',
   saved: 'Memories you save show up here, only for you.',

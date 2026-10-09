@@ -53,6 +53,26 @@ public interface BlockRepository extends JpaRepository<Block, BlockId> {
             """, nativeQuery = true)
     int deleteCloseFriendsBetween(UUID first, UUID second);
 
+    /** Ends album collaboration between the two: each leaves the other's albums. */
+    @Modifying
+    @Query(value = """
+            DELETE FROM album_collaborators c USING albums al
+            WHERE c.album_id = al.id
+              AND ((al.owner_id = :first AND c.user_id = :second)
+                OR (al.owner_id = :second AND c.user_id = :first))
+            """, nativeQuery = true)
+    int deleteAlbumCollaborationBetween(UUID first, UUID second);
+
+    /** Memories either user added to the other's albums leave with the collaboration. */
+    @Modifying
+    @Query(value = """
+            DELETE FROM album_memories am USING albums al
+            WHERE am.album_id = al.id
+              AND ((al.owner_id = :first AND am.added_by = :second)
+                OR (al.owner_id = :second AND am.added_by = :first))
+            """, nativeQuery = true)
+    int deleteAlbumMemoriesAddedBetween(UUID first, UUID second);
+
     /** Removes tags of either user on the other's memories. */
     @Modifying
     @Query(value = """

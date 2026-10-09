@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { api, withPage } from './client';
 import type {
+  Album,
   Comment,
   GridItem,
   MapMemory,
@@ -38,9 +39,12 @@ export const keys = {
   search: (query: string) => ['search', query] as const,
   onThisDay: (date: string) => ['on-this-day', date] as const,
   map: (bbox: string) => ['map', bbox] as const,
+  album: (id: string) => ['album', id] as const,
+  albumMemories: (id: string) => ['album-memories', id] as const,
+  albums: (username: string) => ['albums', username] as const,
 };
 
-export type GridTab = 'memories' | 'tagged' | 'saved';
+export type GridTab = 'memories' | 'tagged' | 'saved' | 'albums';
 
 function infinitePage<T>(path: string, limit?: number) {
   return {
@@ -65,6 +69,68 @@ export function useFeed() {
 export function useGrid(username: string, tab: GridTab, enabled = true) {
   const path = tab === 'saved' ? '/api/saved' : `/api/users/${username}/${tab === 'memories' ? 'memories' : 'tagged'}`;
   return useInfiniteQuery({ queryKey: keys.grid(username, tab), enabled, ...infinitePage<GridItem>(path, 30) });
+}
+
+export function useAlbum(id: string) {
+  return useQuery({ queryKey: keys.album(id), queryFn: () => api<Album>(`/api/albums/${id}`) });
+}
+
+export function useAlbumMemories(id: string) {
+  return useInfiniteQuery({ queryKey: keys.albumMemories(id), ...infinitePage<GridItem>(`/api/albums/${id}/memories`, 30) });
+}
+
+export function useProfileAlbums(username: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.albums(username),
+    queryFn: () => api<Page<Album>>(`/api/users/${username}/albums`),
+    enabled: enabled && username !== '',
+  });
+}
+
+/** Every album change can affect the album, its memories, and album lists, so refresh all of them. */
+function useAlbumMutation<T, R>(mutationFn: (input: T) => Promise<R>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ['album'] });
+      client.invalidateQueries({ queryKey: ['album-memories'] });
+      client.invalidateQueries({ queryKey: ['albums'] });
+    },
+  });
+}
+
+export function useCreateAlbum() {
+  return useAlbumMutation((input: { title: string; description: string; visibility: Visibility }) =>
+    api<Album>('/api/albums', { method: 'POST', body: input }));
+}
+
+export function useUpdateAlbum(id: string) {
+  return useAlbumMutation((input: { title?: string; description?: string; visibility?: Visibility; coverMemoryId?: string }) =>
+    api<Album>(`/api/albums/${id}`, { method: 'PATCH', body: input }));
+}
+
+export function useDeleteAlbum(id: string) {
+  return useAlbumMutation(() => api<void>(`/api/albums/${id}`, { method: 'DELETE' }));
+}
+
+export function useAddToAlbum() {
+  return useAlbumMutation(({ albumId, memoryIds }: { albumId: string; memoryIds: string[] }) =>
+    api<void>(`/api/albums/${albumId}/memories`, { method: 'POST', body: { memoryIds } }));
+}
+
+export function useRemoveFromAlbum(id: string) {
+  return useAlbumMutation((memoryId: string) => api<void>(`/api/albums/${id}/memories/${memoryId}`, { method: 'DELETE' }));
+}
+
+export function useAddCollaborator(id: string) {
+  return useAlbumMutation(({ userId, role }: { userId: string; role: 'EDITOR' | 'VIEWER' }) =>
+    api<void>(`/api/albums/${id}/collaborators`, { method: 'POST', body: { userId, role } }));
+}
+
+/** The owner removes someone ({@code userId}), or a collaborator leaves ({@code 'me'}). */
+export function useRemoveCollaborator(id: string) {
+  return useAlbumMutation((userId: string) => api<void>(`/api/albums/${id}/collaborators/${userId}`, { method: 'DELETE' }));
 }
 
 /** Map markers for a viewport; keeps showing the previous markers while the next box loads. */

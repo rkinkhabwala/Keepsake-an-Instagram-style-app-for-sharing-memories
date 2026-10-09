@@ -38,6 +38,8 @@ public class BlockService {
         blockRepository.deleteFollowsBetween(blockerId, blockedId);
         blockRepository.deleteCloseFriendsBetween(blockerId, blockedId);
         blockRepository.deleteTagsBetween(blockerId, blockedId);
+        blockRepository.deleteAlbumMemoriesAddedBetween(blockerId, blockedId);
+        blockRepository.deleteAlbumCollaborationBetween(blockerId, blockedId);
     }
 
     /** Lifts the block only; follows, close friends, and tags removed by it stay removed. */

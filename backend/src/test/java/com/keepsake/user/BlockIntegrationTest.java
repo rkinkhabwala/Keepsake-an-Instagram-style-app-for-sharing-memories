@@ -106,6 +106,60 @@ class BlockIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void blockEndsAlbumCollaborationBetweenThemInBothDirections() throws Exception {
+        TestUser a = api.signup("blk_album_a");
+        TestUser b = api.signup("blk_album_b");
+        TestUser c = api.signup("blk_album_c");
+        api.follow(a, b);
+        api.follow(b, a);
+        api.follow(c, a);
+        UUID aAlbum = album(a, "A's album");
+        UUID bAlbum = album(b, "B's album");
+        collaborate(a, aAlbum, b);
+        collaborate(a, aAlbum, c);
+        collaborate(b, bAlbum, a);
+        UUID bInA = api.createReadyMemory(b, "PUBLIC");
+        UUID cInA = api.createReadyMemory(c, "PUBLIC");
+        UUID aInB = api.createReadyMemory(a, "PUBLIC");
+        addToAlbum(b, aAlbum, bInA);
+        addToAlbum(c, aAlbum, cInA);
+        addToAlbum(a, bAlbum, aInB);
+
+        api.block(a, b);
+        mockMvc.perform(as(a, delete("/api/blocks/" + b.id()))).andExpect(status().isNoContent());
+
+        mockMvc.perform(as(a, get("/api/albums/" + aAlbum)))
+                .andExpect(jsonPath("$.collaborators[*].user.username").value(Matchers.contains("blk_album_c")));
+        mockMvc.perform(as(b, get("/api/albums/" + bAlbum))).andExpect(jsonPath("$.collaborators").isEmpty());
+        mockMvc.perform(as(a, get("/api/albums/" + aAlbum + "/memories")))
+                .andExpect(jsonPath("$.items[*].id").value(Matchers.contains(cInA.toString())));
+        mockMvc.perform(as(b, get("/api/albums/" + bAlbum + "/memories"))).andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    private UUID album(TestUser owner, String title) throws Exception {
+        String body = mockMvc.perform(as(owner, post("/api/albums"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("title", title, "visibility", "PUBLIC"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("id").asText());
+    }
+
+    private void collaborate(TestUser owner, UUID album, TestUser user) throws Exception {
+        mockMvc.perform(as(owner, post("/api/albums/" + album + "/collaborators"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("userId", user.id(), "role", "EDITOR"))))
+                .andExpect(status().isNoContent());
+    }
+
+    private void addToAlbum(TestUser user, UUID album, UUID memory) throws Exception {
+        mockMvc.perform(as(user, post("/api/albums/" + album + "/memories"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(api.json(Map.of("memoryIds", List.of(memory)))))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     void blockedUsersCannotSeeOrReachEachOther() throws Exception {
         TestUser a = api.signup("blk_reach_a");
         TestUser b = api.signup("blk_reach_b");
