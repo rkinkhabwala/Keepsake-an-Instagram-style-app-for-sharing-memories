@@ -3,6 +3,7 @@ package com.keepsake.memory.service;
 import com.keepsake.common.error.ConflictException;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.pagination.InvalidRequestException;
+import com.keepsake.hashtag.service.HashtagService;
 import com.keepsake.media.entity.MediaUpload;
 import com.keepsake.media.entity.MediaUploadStatus;
 import com.keepsake.media.repository.MediaUploadRepository;
@@ -56,6 +57,7 @@ public class MemoryService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final TransactionTemplate transactions;
+    private final HashtagService hashtagService;
 
     public MemoryService(
             MemoryRepository memoryRepository,
@@ -68,7 +70,8 @@ public class MemoryService {
             MemoryDtoAssembler assembler,
             ApplicationEventPublisher events,
             Clock clock,
-            TransactionTemplate transactions
+            TransactionTemplate transactions,
+            HashtagService hashtagService
     ) {
         this.memoryRepository = memoryRepository;
         this.mediaRepository = mediaRepository;
@@ -81,6 +84,7 @@ public class MemoryService {
         this.events = events;
         this.clock = clock;
         this.transactions = transactions;
+        this.hashtagService = hashtagService;
     }
 
     /**
@@ -127,6 +131,7 @@ public class MemoryService {
             mediaRepository.save(new MemoryMedia(memory.getId(), uploads.get(position), position));
         }
         tagged.forEach(userId -> personRepository.save(new MemoryPerson(memory.getId(), userId)));
+        hashtagService.indexCaption(memory.getId(), caption);
         events.publishEvent(new MemoryMediaSubmitted(memory.getId(), uploadIds));
         return new MemoryStatusDto(memory.getId(), memory.getStatus());
     }
@@ -155,6 +160,7 @@ public class MemoryService {
 
         if (request.captionPresent()) {
             memory.setCaption(caption(request.caption()));
+            hashtagService.indexCaption(memoryId, memory.getCaption());
         }
         if (request.occurredOn() != null) {
             memory.setOccurredOn(validOccurredOn(request.occurredOn()));

@@ -5,6 +5,7 @@ import { Spinner } from './components/ui';
 import { LoginPage, SignupPage } from './pages/AuthPages';
 import { CreateMemoryPage } from './pages/CreateMemoryPage';
 import { FeedPage } from './pages/FeedPage';
+import { HashtagPage } from './pages/HashtagPage';
 import { MemoryDetailPage, NotFound } from './pages/MemoryDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="u/:username" element={<ProfilePage />} />
           <Route path="u/:username/followers" element={<UserListPage list="followers" />} />
           <Route path="u/:username/following" element={<UserListPage list="following" />} />
+          <Route path="tags/:tag" element={<HashtagPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
