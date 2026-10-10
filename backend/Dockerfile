@@ -3,7 +3,9 @@ WORKDIR /workspace
 COPY pom.xml .
 RUN mvn -q -DskipTests dependency:go-offline
 COPY src ./src
-RUN mvn -q -DskipTests package
+# MAVEN_PROFILES=loadtest builds the load-test image; the normal image never contains that code.
+ARG MAVEN_PROFILES=""
+RUN mvn -q -DskipTests ${MAVEN_PROFILES:+-P$MAVEN_PROFILES} package
 
 FROM eclipse-temurin:21-jre
 # libheif's heif-dec decodes HEIC uploads (the libde265 plugin supplies the HEVC codec); FFmpeg makes video

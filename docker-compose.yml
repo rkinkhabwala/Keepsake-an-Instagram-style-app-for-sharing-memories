@@ -70,7 +70,7 @@ services:
   backend:
     build:
       context: ./backend
-    environment:
+    environment: &backend-environment
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keepsake}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-keepsake}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-keepsake-local}
@@ -147,7 +147,42 @@ services:
     depends_on:
       - prometheus
 
+  # Load test (Phase 3): docker compose --profile loadtest run --rm k6. See README.
+  loadtest-seed:
+    profiles: ["loadtest"]
+    build:
+      context: ./backend
+      args:
+        MAVEN_PROFILES: loadtest
+    environment:
+      <<: *backend-environment
+      SPRING_PROFILES_ACTIVE: loadtest
+      # The command exits when done; its own HTTP server listens on a random port nothing reaches.
+      SERVER_PORT: "0"
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+      KEEPSAKE_SEED_ENABLED: "false"
+      KEEPSAKE_LOADTEST_TOKENS_FILE: /loadtest/tokens.json
+    volumes:
+      - loadtest-data:/loadtest
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  k6:
+    profiles: ["loadtest"]
+    image: grafana/k6:2.3.0
+    command: ["run", "/scripts/feed.js"]
+    environment:
+      BASE_URL: http://backend:8080
+    volumes:
+      - ./loadtest:/scripts:ro
+      - loadtest-data:/loadtest:ro
+    depends_on:
+      loadtest-seed:
+        condition: service_completed_successfully
+
 volumes:
+  loadtest-data:
   postgres-data:
   minio-data:
   kafka-data:

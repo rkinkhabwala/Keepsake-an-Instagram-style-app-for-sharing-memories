@@ -25,6 +25,20 @@ docker compose --profile observability up --build
 - Prometheus: <http://localhost:9090>, scraping the backend's `/actuator/prometheus` every 5 seconds.
 - Both are bound to 127.0.0.1. The metrics endpoint is reachable only inside Compose and from this machine.
 
+## Load test
+
+The k6 feed test (1,000 virtual users scrolling five feed pages each, failing if p95 reaches 300 ms) runs behind the `loadtest` Compose profile, against a running stack:
+
+```
+docker compose up -d --build --wait
+docker compose --profile loadtest run --rm k6
+```
+
+- `loadtest-seed` runs first. It is built with `mvn -Ploadtest`, which compiles in a command the normal build leaves out. The command seeds about 12,000 `lt_*` accounts once, including three accounts above the 10k-follower fan-out threshold, and about 36,000 memories. It then writes 1,000 access tokens to the `loadtest-data` volume and builds those users' feeds.
+- The tokens expire after 15 minutes. Re-running the command mints fresh ones and does not seed again.
+- k6 calls the backend directly (`http://backend:8080`) inside the Compose network. Watch the run on the Grafana dashboard if the `observability` profile is up.
+- The seeded accounts stay in the database. Don't run this against a stack whose data you want to keep clean.
+
 ## Development checks
 
 - Backend: `cd backend && mvn verify`
