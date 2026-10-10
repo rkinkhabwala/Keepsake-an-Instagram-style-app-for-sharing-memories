@@ -12,7 +12,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -51,6 +50,25 @@ public class EngagementCounters {
             return 1
             """, Long.class);
 
+    /**
+     * HMGET of every ARGV field from each KEYS hash, flattened. Scripts run on the shared connection; pipelining
+     * would open a dedicated Redis connection per call, which the k6 feed test showed to be the costliest step.
+     */
+    private static final DefaultRedisScript<List> PENDING = new DefaultRedisScript<>("""
+            local out = {}
+            for _, key in ipairs(KEYS) do
+              local values = redis.call('HMGET', key, unpack(ARGV))
+              for i = 1, #ARGV do out[#out + 1] = values[i] end
+            end
+            return out
+            """, List.class);
+
+    /** KEYS[1] the counts hash, KEYS[2] the dirty set; ARGV[1] memory id, ARGV[2] delta. */
+    private static final DefaultRedisScript<Long> CHANGE = new DefaultRedisScript<>("""
+            redis.call('HINCRBY', KEYS[1], ARGV[1], ARGV[2])
+            return redis.call('SADD', KEYS[2], ARGV[1])
+            """, Long.class);
+
     public record Counts(int likes, int comments) {
     }
 
@@ -79,24 +97,19 @@ public class EngagementCounters {
         if (memoryIds.isEmpty()) {
             return Map.of();
         }
-        List<String> fields = memoryIds.stream().map(UUID::toString).toList();
+        List<UUID> ids = List.copyOf(memoryIds);
+        int count = ids.size();
         try {
-            List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
-                byte[][] keys = fields.stream().map(String::getBytes).toArray(byte[][]::new);
-                for (String hash : List.of(LIKES, LIKES + FLUSHING, COMMENTS, COMMENTS + FLUSHING)) {
-                    connection.hashCommands().hMGet(hash.getBytes(), keys);
-                }
-                return null;
-            });
+            List<?> values = redis.execute(PENDING, List.of(LIKES, LIKES + FLUSHING, COMMENTS, COMMENTS + FLUSHING),
+                    ids.stream().map(UUID::toString).toArray());
             Map<UUID, Counts> pending = new HashMap<>();
-            int index = 0;
-            for (UUID memoryId : memoryIds) {
-                int likes = number(results.get(0), index) + number(results.get(1), index);
-                int comments = number(results.get(2), index) + number(results.get(3), index);
+            for (int index = 0; index < count; index++) {
+                UUID memoryId = ids.get(index);
+                int likes = number(values, index) + number(values, count + index);
+                int comments = number(values, 2 * count + index) + number(values, 3 * count + index);
                 if (likes != 0 || comments != 0) {
                     pending.put(memoryId, new Counts(likes, comments));
                 }
-                index++;
             }
             return pending;
         } catch (DataAccessException unavailable) {
@@ -160,11 +173,7 @@ public class EngagementCounters {
     private void afterCommit(UUID memoryId, String hash, int delta) {
         Runnable apply = () -> {
             try {
-                redis.executePipelined((RedisCallback<Object>) connection -> {
-                    connection.hashCommands().hIncrBy(hash.getBytes(), memoryId.toString().getBytes(), delta);
-                    connection.setCommands().sAdd(DIRTY.getBytes(), memoryId.toString().getBytes());
-                    return null;
-                });
+                redis.execute(CHANGE, List.of(hash, DIRTY), memoryId.toString(), String.valueOf(delta));
             } catch (DataAccessException unavailable) {
                 log.warn("Redis unavailable; updating the count for memory {} directly", memoryId, unavailable);
                 String column = hash.equals(LIKES) ? "like_count" : "comment_count";
@@ -184,8 +193,8 @@ public class EngagementCounters {
         }
     }
 
-    private static int number(Object hmgetResult, int index) {
-        if (!(hmgetResult instanceof List<?> values) || values.get(index) == null) {
+    private static int number(List<?> values, int index) {
+        if (values == null || index >= values.size() || values.get(index) == null) {
             return 0;
         }
         Object value = values.get(index);

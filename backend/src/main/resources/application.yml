@@ -8,6 +8,9 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/keepsake}
     username: ${SPRING_DATASOURCE_USERNAME:keepsake}
     password: ${SPRING_DATASOURCE_PASSWORD:keepsake-local}
+    hikari:
+      # Headroom for the k6 feed test (1,000 users); the default is 10 and Postgres allows 100.
+      maximum-pool-size: ${DB_POOL_SIZE:30}
   flyway:
     enabled: true
   jpa:

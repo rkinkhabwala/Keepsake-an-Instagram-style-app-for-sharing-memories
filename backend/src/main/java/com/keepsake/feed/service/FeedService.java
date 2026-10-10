@@ -17,7 +17,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The home feed (spec §7): the viewer's fanned-out ids from {@link FeedStore}, merged with the memories of
@@ -55,7 +54,10 @@ public class FeedService {
         this.fanOutOnRead = fanOutOnRead;
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Deliberately not one transaction: each query borrows a connection only while it runs, instead of holding
+     * one across the Redis calls and URL signing.
+     */
     public CursorPage<MemoryDto> feed(UUID viewerId, CursorPageRequest page) {
         List<Memory> rows;
         try {

@@ -1,17 +1,14 @@
 package com.keepsake.engagement.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -19,9 +16,8 @@ class EngagementCountersTest {
 
     @Test
     void fallsBackToUpdatingPostgresWhenRedisIsDown() {
-        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        StringRedisTemplate redis = redisDown();
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(redis.executePipelined(any(RedisCallback.class))).thenThrow(new RedisConnectionFailureException("down"));
         EngagementCounters counters = new EngagementCounters(redis, jdbc, new SimpleMeterRegistry());
         UUID memoryId = UUID.randomUUID();
 
@@ -35,10 +31,14 @@ class EngagementCountersTest {
 
     @Test
     void readsShowStoredCountsWhenRedisIsDown() {
-        StringRedisTemplate redis = mock(StringRedisTemplate.class);
-        when(redis.executePipelined(any(RedisCallback.class))).thenThrow(new RedisConnectionFailureException("down"));
-        EngagementCounters counters = new EngagementCounters(redis, mock(JdbcTemplate.class), new SimpleMeterRegistry());
+        EngagementCounters counters = new EngagementCounters(redisDown(), mock(JdbcTemplate.class), new SimpleMeterRegistry());
 
         assertThat(counters.pending(List.of(UUID.randomUUID()))).isEmpty();
+    }
+
+    private static StringRedisTemplate redisDown() {
+        return mock(StringRedisTemplate.class, invocation -> {
+            throw new RedisConnectionFailureException("down");
+        });
     }
 }
