@@ -18,6 +18,9 @@ public interface MemoryPersonRepository extends JpaRepository<MemoryPerson, Memo
             """)
     List<Object[]> findTaggedUsersByMemoryIds(java.util.Collection<UUID> memoryIds);
 
+    @Query("SELECT p.id.userId FROM MemoryPerson p WHERE p.id.memoryId = :memoryId")
+    List<UUID> findUserIds(UUID memoryId);
+
     @Modifying
     @Query("DELETE FROM MemoryPerson p WHERE p.id.memoryId = :memoryId")
     void deleteByMemoryId(UUID memoryId);

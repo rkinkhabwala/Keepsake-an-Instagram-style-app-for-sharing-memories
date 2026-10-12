@@ -61,6 +61,9 @@ export interface MemoryMedia {
   width: number | null;
   height: number | null;
   blurhash: string | null;
+  /** Videos only: the poster frame, and the length in milliseconds. */
+  posterUrl: string | null;
+  durationMs: number | null;
 }
 
 export interface Comment {
@@ -98,6 +101,8 @@ export interface GridItem {
   blurhash: string | null;
   mediaCount: number;
   occurredOn: string;
+  /** True when the memory's first item is a video. */
+  video: boolean;
 }
 
 export type AlbumRole = 'OWNER' | 'EDITOR' | 'VIEWER' | 'NONE';
@@ -150,4 +155,19 @@ export interface UploadMetadata {
   takenOn: string | null;
   latitude: number | null;
   longitude: number | null;
+}
+
+export type NotificationType = 'LIKE' | 'COMMENT' | 'FOLLOW' | 'FOLLOW_REQUEST' | 'TAGGED' | 'ON_THIS_DAY';
+
+/** For grouped likes, actor is the latest liker and othersCount how many others liked since the last read. */
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  actor: UserSummary | null;
+  othersCount: number;
+  memoryId: string | null;
+  memoryThumbUrl: string | null;
+  commentPreview: string | null;
+  read: boolean;
+  at: string;
 }

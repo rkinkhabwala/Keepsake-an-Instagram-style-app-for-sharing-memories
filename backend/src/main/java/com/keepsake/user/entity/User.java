@@ -41,6 +41,9 @@ public class User {
     @Column(name = "is_private", nullable = false)
     private boolean isPrivate;
 
+    @Column(name = "time_zone")
+    private String timeZone;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -87,6 +90,14 @@ public class User {
 
     public void setAvatarKey(String avatarKey) {
         this.avatarKey = avatarKey;
+    }
+
+    public void setTimeZone(String timeZone) {
+        this.timeZone = timeZone;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
     }
 
     public void updateProfile(String displayName, String bio, boolean isPrivate) {

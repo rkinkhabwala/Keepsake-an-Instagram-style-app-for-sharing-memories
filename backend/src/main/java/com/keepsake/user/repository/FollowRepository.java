@@ -19,7 +19,7 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
             VALUES (:followerId, :followeeId, :status, NOW(), NOW())
             ON CONFLICT DO NOTHING
             """, nativeQuery = true)
-    void insertIfAbsent(UUID followerId, UUID followeeId, String status);
+    int insertIfAbsent(UUID followerId, UUID followeeId, String status);
 
     @Modifying
     @Query(value = """
@@ -42,6 +42,9 @@ public interface FollowRepository extends JpaRepository<Follow, FollowId> {
             WHERE f.id.followerId = :followerId AND f.id.followeeId = :followeeId AND f.status = :status
             """)
     int deleteWithStatus(UUID followerId, UUID followeeId, FollowStatus status);
+
+    @Query("SELECT f.id.followerId FROM Follow f WHERE f.id.followeeId = :followeeId AND f.status = :status")
+    List<UUID> findFollowerIds(UUID followeeId, FollowStatus status);
 
     boolean existsByIdAndStatus(FollowId id, FollowStatus status);
 

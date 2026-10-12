@@ -58,6 +58,12 @@ public class MediaUpload {
     @Column(name = "gps_lng")
     private Double gpsLng;
 
+    @Column(name = "poster_key")
+    private String posterKey;
+
+    @Column(name = "duration_ms")
+    private Integer durationMs;
+
     @Column(name = "failure_reason")
     private String failureReason;
 
@@ -96,7 +102,7 @@ public class MediaUpload {
         failureReason = null;
     }
 
-    public void markReady(ProcessedImage result) {
+    public void markReady(ProcessedMedia result) {
         status = MediaUploadStatus.READY;
         displayKey = result.displayKey();
         thumbKey = result.thumbKey();
@@ -106,6 +112,8 @@ public class MediaUpload {
         takenOn = result.takenOn();
         gpsLat = result.latitude();
         gpsLng = result.longitude();
+        posterKey = result.posterKey();
+        durationMs = result.durationMs();
         failureReason = null;
     }
 
@@ -116,6 +124,22 @@ public class MediaUpload {
 
     public String displayKeyFor() {
         return "display/" + id + ".webp";
+    }
+
+    public String videoKeyFor() {
+        return "video/" + id + ".mp4";
+    }
+
+    public boolean isVideo() {
+        return contentType.startsWith("video/");
+    }
+
+    public String getPosterKey() {
+        return posterKey;
+    }
+
+    public Integer getDurationMs() {
+        return durationMs;
     }
 
     public String thumbKeyFor() {

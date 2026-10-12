@@ -69,7 +69,7 @@ class ImageDecoderTest {
 
     @Test
     void decodesJpegAndAppliesOrientation() throws Exception {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null, null, null));
 
         BufferedImage image = decoder.decode(TestImages.jpeg(40, 20), ImageType.JPEG, 6);
 
@@ -79,7 +79,7 @@ class ImageDecoderTest {
 
     @Test
     void rejectsImagesOverThePixelLimitBeforeDecodingPixels() {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null, null, null));
 
         assertThatThrownBy(() -> decoder.decode(pngHeaderOnly(10_000, 10_000), ImageType.PNG, 1))
                 .isInstanceOf(MediaProcessingException.class)
@@ -88,7 +88,7 @@ class ImageDecoderTest {
 
     @Test
     void rejectsCorruptImages() {
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties("unused", "unused", null, null, null));
         byte[] truncated = java.util.Arrays.copyOf(TestImages.jpeg(64, 64), 20);
 
         assertThatThrownBy(() -> decoder.decode(truncated, ImageType.JPEG, 1))
@@ -99,7 +99,7 @@ class ImageDecoderTest {
     void decodesHeicThroughConfiguredDecoderWithoutReapplyingOrientation() throws Exception {
         Path png = Files.write(tempDir.resolve("decoded.png"), TestImages.png(30, 10));
         Path script = executable("heif-dec-stub", "#!/bin/sh\ncp '" + png + "' \"$2\"\n");
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null, null, null));
 
         BufferedImage image = decoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 6);
 
@@ -110,7 +110,7 @@ class ImageDecoderTest {
     @Test
     void reportsHeicDecoderFailure() throws Exception {
         Path script = executable("heif-dec-failing", "#!/bin/sh\nexit 1\n");
-        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null));
+        ImageDecoder decoder = new ImageDecoder(new MediaProperties(script.toString(), heifInfo(30, 10).toString(), null, null, null));
 
         assertThatThrownBy(() -> decoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 1))
                 .isInstanceOf(MediaProcessingException.class)
@@ -122,7 +122,7 @@ class ImageDecoderTest {
         Path decoded = tempDir.resolve("decoder-ran");
         Path decoder = executable("heif-dec-spy", "#!/bin/sh\ntouch '" + decoded + "'\n");
         ImageDecoder imageDecoder = new ImageDecoder(
-                new MediaProperties(decoder.toString(), heifInfo(30_000, 30_000).toString(), null));
+                new MediaProperties(decoder.toString(), heifInfo(30_000, 30_000).toString(), null, null, null));
 
         assertThatThrownBy(() -> imageDecoder.decode(new byte[] {1, 2, 3}, ImageType.HEIC, 1))
                 .isInstanceOf(MediaProcessingException.class)

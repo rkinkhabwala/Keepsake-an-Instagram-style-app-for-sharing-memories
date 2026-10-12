@@ -4,6 +4,7 @@ import com.keepsake.engagement.dto.CommentDto;
 import com.keepsake.engagement.repository.LikeRepository;
 import com.keepsake.engagement.repository.SaveRepository;
 import com.keepsake.engagement.service.CommentAssembler;
+import com.keepsake.engagement.service.EngagementCounters;
 import com.keepsake.media.service.MediaStorage;
 import com.keepsake.memory.dto.LocationDto;
 import com.keepsake.memory.dto.MemoryDto;
@@ -37,6 +38,7 @@ public class MemoryDtoAssembler {
     private final LikeRepository likeRepository;
     private final SaveRepository saveRepository;
     private final CommentAssembler commentAssembler;
+    private final EngagementCounters counters;
 
     public MemoryDtoAssembler(
             MemoryMediaRepository mediaRepository,
@@ -46,7 +48,8 @@ public class MemoryDtoAssembler {
             UserRepository userRepository,
             LikeRepository likeRepository,
             SaveRepository saveRepository,
-            CommentAssembler commentAssembler
+            CommentAssembler commentAssembler,
+            EngagementCounters counters
     ) {
         this.mediaRepository = mediaRepository;
         this.personRepository = personRepository;
@@ -56,6 +59,7 @@ public class MemoryDtoAssembler {
         this.likeRepository = likeRepository;
         this.saveRepository = saveRepository;
         this.commentAssembler = commentAssembler;
+        this.counters = counters;
     }
 
     /**
@@ -69,6 +73,8 @@ public class MemoryDtoAssembler {
         List<UUID> ids = memories.stream().map(Memory::getId).toList();
         Set<UUID> liked = Set.copyOf(likeRepository.findMemoryIds(viewerId, ids));
         Set<UUID> saved = Set.copyOf(saveRepository.findMemoryIds(viewerId, ids));
+        // Stored counts plus changes not yet flushed from Redis.
+        Map<UUID, EngagementCounters.Counts> pending = counters.pending(ids);
         Map<UUID, List<CommentDto>> previews = commentAssembler.previews(viewerId,
                 memories.stream().collect(Collectors.toMap(Memory::getId, Memory::getAuthorId)));
         Map<UUID, UserSummaryDto> authors = userRepository.findAllById(
@@ -88,14 +94,18 @@ public class MemoryDtoAssembler {
                 location(memory),
                 memory.getVisibility(),
                 memory.getStatus(),
-                memory.getLikeCount(),
-                memory.getCommentCount(),
+                Math.max(0, memory.getLikeCount() + pendingOf(pending, memory).likes()),
+                Math.max(0, memory.getCommentCount() + pendingOf(pending, memory).comments()),
                 liked.contains(memory.getId()),
                 saved.contains(memory.getId()),
                 media.getOrDefault(memory.getId(), List.of()),
                 tagged.getOrDefault(memory.getId(), List.of()),
                 previews.getOrDefault(memory.getId(), List.of()),
                 memory.getCreatedAt())).toList();
+    }
+
+    private static EngagementCounters.Counts pendingOf(Map<UUID, EngagementCounters.Counts> pending, Memory memory) {
+        return pending.getOrDefault(memory.getId(), new EngagementCounters.Counts(0, 0));
     }
 
     /** Grid tiles: the first photo's thumb only. */
@@ -114,7 +124,8 @@ public class MemoryDtoAssembler {
                     cover == null || !cover.isReady() ? null : storage.presignDownload(cover.getThumbKey()).toString(),
                     cover == null ? null : cover.getBlurhash(),
                     items.size(),
-                    memory.getOccurredOn());
+                    memory.getOccurredOn(),
+                    cover != null && cover.getType() == com.keepsake.memory.entity.MediaType.VIDEO);
         }).toList();
     }
 
@@ -147,7 +158,10 @@ public class MemoryDtoAssembler {
                 media.isReady() ? storage.presignDownload(media.getThumbKey()).toString() : null,
                 media.getWidth(),
                 media.getHeight(),
-                media.getBlurhash());
+                media.getBlurhash(),
+                media.isReady() && media.getPosterKey() != null
+                        ? storage.presignDownload(media.getPosterKey()).toString() : null,
+                media.getDurationMs());
     }
 
     static LocationDto location(Memory memory) {

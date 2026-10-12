@@ -30,7 +30,7 @@ describe('ProfilePage', () => {
     const api = fakeApi();
     signedIn(api);
     api.on('GET', '/api/users/ana', profile({ username: 'ana', relationship: 'SELF' }));
-    api.on('GET', /\/api\/users\/ana\/memories/, { items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 2, occurredOn: '2020-01-02' }], nextCursor: null });
+    api.on('GET', /\/api\/users\/ana\/memories/, { items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 2, occurredOn: '2020-01-02', video: false }], nextCursor: null });
     api.on('GET', /\/api\/saved/, { items: [], nextCursor: null });
     renderApp(<ProfilePage />, { route: '/u/ana', path: '/u/:username' });
 

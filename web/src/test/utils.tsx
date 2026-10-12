@@ -51,6 +51,7 @@ export const ME: AuthResponse = {
 export function signedIn(api: FakeApi) {
   api.on('POST', '/api/auth/refresh', ME);
   api.on('GET', '/api/users/me', { ...ME.user, avatarUrl: null });
+  api.on('GET', '/api/notifications/unread-count', { count: 0 });
 }
 
 export function renderApp(ui: ReactElement, { route = '/', path = '*' }: { route?: string; path?: string } = {}) {
@@ -82,7 +83,7 @@ export function memory(overrides: Partial<Memory> = {}): Memory {
     commentCount: 0,
     likedByViewer: false,
     savedByViewer: false,
-    media: [{ position: 0, type: 'IMAGE', displayUrl: '/d.webp', thumbUrl: '/t.webp', width: 1080, height: 720, blurhash: 'L00000fQfQfQfQfQfQfQfQfQfQfQ' }],
+    media: [{ position: 0, type: 'IMAGE', displayUrl: '/d.webp', thumbUrl: '/t.webp', width: 1080, height: 720, blurhash: 'L00000fQfQfQfQfQfQfQfQfQfQfQ', posterUrl: null, durationMs: null }],
     taggedPeople: [],
     latestComments: [],
     createdAt: '2026-01-01T00:00:00Z',

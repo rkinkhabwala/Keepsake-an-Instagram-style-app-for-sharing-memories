@@ -1,5 +1,6 @@
 package com.keepsake.auth.service;
 
+import com.keepsake.user.service.TimeZones;
 import com.keepsake.auth.dto.AuthResponse;
 import com.keepsake.auth.dto.AuthUserDto;
 import com.keepsake.auth.dto.LoginRequest;
@@ -46,6 +47,7 @@ public class AuthService {
     private final Clock clock;
     private final SessionSealer sessionSealer;
     private final String dummyPasswordHash;
+    private final TimeZones timeZones;
 
     public AuthService(
             UserRepository userRepository,
@@ -53,7 +55,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             Clock clock,
-            SessionSealer sessionSealer
+            SessionSealer sessionSealer,
+            TimeZones timeZones
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -61,6 +64,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.clock = clock;
         this.sessionSealer = sessionSealer;
+        this.timeZones = timeZones;
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
@@ -78,11 +82,10 @@ public class AuthService {
             throw new InvalidRequestException("Password must be no more than 72 UTF-8 bytes");
         }
 
-        User user = userRepository.saveAndFlush(new User(
-                username,
-                email,
-                passwordEncoder.encode(request.password()),
-                request.displayName().trim()));
+        User newUser = new User(username, email, passwordEncoder.encode(request.password()),
+                request.displayName().trim());
+        timeZones.valid(request.timeZone()).ifPresent(newUser::setTimeZone);
+        User user = userRepository.saveAndFlush(newUser);
         return newSession(user, UuidV7.generate());
     }
 
@@ -95,6 +98,7 @@ public class AuthService {
         if (user.isEmpty() || !passwordMatches) {
             throw new UnauthenticatedException();
         }
+        timeZones.valid(request.timeZone()).ifPresent(user.get()::setTimeZone);
         return newSession(user.get(), UuidV7.generate());
     }
 

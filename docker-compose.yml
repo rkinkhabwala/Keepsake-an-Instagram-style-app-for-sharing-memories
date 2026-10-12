@@ -43,15 +43,40 @@ services:
       timeout: 3s
       retries: 15
 
+  # Single-node Kafka in KRaft mode (no ZooKeeper), reachable only inside the Compose network.
+  kafka:
+    image: apache/kafka:4.3.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null"]
+      interval: 5s
+      timeout: 10s
+      start_period: 20s
+      retries: 20
+
   backend:
     build:
       context: ./backend
-    environment:
+    environment: &backend-environment
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keepsake}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-keepsake}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-keepsake-local}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KEEPSAKE_WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
       KEEPSAKE_TRUSTED_PROXIES: web
       KEEPSAKE_JWT_SECRET: ${JWT_SECRET:-replace-with-a-random-secret-of-at-least-32-characters}
@@ -78,6 +103,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   web:
     build:
@@ -89,6 +116,75 @@ services:
       backend:
         condition: service_healthy
 
+  # Metrics and dashboards (spec §11): docker compose --profile observability up
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    profiles: ["observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:13.0.10
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-keepsake-local-grafana}
+      # Local, read-only viewing without a login; changes still need the admin account.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/keepsake.json
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
+  # Load test (Phase 3): docker compose --profile loadtest run --rm k6. See README.
+  loadtest-seed:
+    profiles: ["loadtest"]
+    build:
+      context: ./backend
+      args:
+        MAVEN_PROFILES: loadtest
+    environment:
+      <<: *backend-environment
+      SPRING_PROFILES_ACTIVE: loadtest
+      # The command exits when done; its own HTTP server listens on a random port nothing reaches.
+      SERVER_PORT: "0"
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+      KEEPSAKE_SEED_ENABLED: "false"
+      KEEPSAKE_LOADTEST_TOKENS_FILE: /loadtest/tokens.json
+    volumes:
+      - loadtest-data:/loadtest
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  k6:
+    profiles: ["loadtest"]
+    image: grafana/k6:2.3.0
+    command: ["run", "/scripts/feed.js"]
+    environment:
+      BASE_URL: http://backend:8080
+    volumes:
+      - ./loadtest:/scripts:ro
+      - loadtest-data:/loadtest:ro
+    depends_on:
+      loadtest-seed:
+        condition: service_completed_successfully
+
 volumes:
+  loadtest-data:
   postgres-data:
   minio-data:
+  kafka-data:
+  prometheus-data:
+  grafana-data:

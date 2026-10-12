@@ -68,4 +68,21 @@ describe('MemoryCard', () => {
     const writes = api.calls.filter((call) => call.method === 'PUT').map((call) => call.path);
     expect(writes).toEqual(['/api/memories/m-1/like', '/api/memories/m-1/save']);
   });
+
+  it('plays videos with their poster in the carousel', () => {
+    const api = fakeApi();
+    signedIn(api);
+    renderApp(
+      <MemoryCard
+        memory={memory({
+          media: [{ position: 0, type: 'VIDEO', displayUrl: '/v.mp4', thumbUrl: '/t.webp', width: 1280, height: 720,
+            blurhash: null, posterUrl: '/p.webp', durationMs: 12_400 }],
+        })}
+      />,
+    );
+
+    const video = screen.getByLabelText('Video, 12 seconds');
+    expect(video).toHaveAttribute('src', '/v.mp4');
+    expect(video).toHaveAttribute('poster', '/p.webp');
+  });
 });

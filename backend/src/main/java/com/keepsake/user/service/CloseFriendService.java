@@ -1,5 +1,6 @@
 package com.keepsake.user.service;
 
+import com.keepsake.feed.service.FeedStore;
 import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
 import com.keepsake.common.pagination.InvalidRequestException;
@@ -17,14 +18,18 @@ public class CloseFriendService {
     private final UserService userService;
     private final UserSummaries userSummaries;
 
+    private final FeedStore feeds;
+
     public CloseFriendService(
             CloseFriendRepository closeFriendRepository,
             UserService userService,
-            UserSummaries userSummaries
+            UserSummaries userSummaries,
+            FeedStore feeds
     ) {
         this.closeFriendRepository = closeFriendRepository;
         this.userService = userService;
         this.userSummaries = userSummaries;
+        this.feeds = feeds;
     }
 
     @Transactional
@@ -34,6 +39,8 @@ public class CloseFriendService {
         }
         userService.requireViewableById(ownerId, friendId);
         closeFriendRepository.insertIfAbsent(ownerId, friendId);
+        // The owner's CLOSE_FRIENDS memories were not fanned out to the new friend.
+        feeds.invalidateAfterCommit(friendId);
     }
 
     @Transactional

@@ -35,7 +35,10 @@ public class MemoryListService {
         this.userService = userService;
     }
 
-    /** Home feed (spec §7, Phase 1): fan-out on read, newest first, cursor = last memory id. */
+    /**
+     * The home feed fanned out on read (spec §7, Phase 1), newest first, cursor = last memory id. The feed is
+     * served by {@code FeedService}; this stays as its fallback and as the reference it is tested against.
+     */
     @Transactional(readOnly = true)
     public CursorPage<MemoryDto> feed(UUID viewerId, CursorPageRequest page) {
         return page(memoryRepository.findFeed(viewerId, page.cursorOrMax(), page.limit() + 1), page,

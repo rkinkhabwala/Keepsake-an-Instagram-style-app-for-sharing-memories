@@ -19,7 +19,7 @@ function albumApi(role: AlbumRole) {
   signedIn(api);
   api.on('GET', '/api/albums/al1', album(role));
   api.on('GET', /\/api\/albums\/al1\/memories/, {
-    items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-04-02' }], nextCursor: null,
+    items: [{ id: 'm1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-04-02', video: false }], nextCursor: null,
   });
   return api;
 }
@@ -42,7 +42,7 @@ describe('AlbumPage', () => {
   it('lets an editor add their own memories and leave', async () => {
     const api = albumApi('EDITOR');
     api.on('GET', /\/api\/users\/ana\/memories/, {
-      items: [{ id: 'mine1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-04-03' }], nextCursor: null,
+      items: [{ id: 'mine1', thumbUrl: '/t.webp', blurhash: null, mediaCount: 1, occurredOn: '2024-04-03', video: false }], nextCursor: null,
     });
     api.on('POST', '/api/albums/al1/memories', null, 204);
     api.on('DELETE', '/api/albums/al1/collaborators/me', null, 204);

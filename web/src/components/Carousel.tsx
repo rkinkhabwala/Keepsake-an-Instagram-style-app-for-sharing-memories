@@ -28,7 +28,21 @@ export function Carousel({ media, label }: { media: MemoryMedia[]; label: string
       >
         {media.map((item, position) => (
           <div key={item.position} className="w-full shrink-0 snap-center" aria-label={`Photo ${position + 1} of ${media.length}`}>
-            <BlurhashImage src={item.displayUrl} blurhash={item.blurhash} alt="" aspectRatio={ratio} />
+            {item.type === 'VIDEO' ? (
+              <video
+                src={item.displayUrl ?? undefined}
+                poster={item.posterUrl ?? undefined}
+                controls
+                muted
+                playsInline
+                preload="metadata"
+                aria-label={`Video, ${Math.round((item.durationMs ?? 0) / 1000)} seconds`}
+                className="w-full bg-black object-contain"
+                style={{ aspectRatio: String(ratio) }}
+              />
+            ) : (
+              <BlurhashImage src={item.displayUrl} blurhash={item.blurhash} alt="" aspectRatio={ratio} />
+            )}
           </div>
         ))}
       </div>

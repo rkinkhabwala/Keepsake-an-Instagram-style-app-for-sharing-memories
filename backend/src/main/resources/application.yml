@@ -8,12 +8,26 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/keepsake}
     username: ${SPRING_DATASOURCE_USERNAME:keepsake}
     password: ${SPRING_DATASOURCE_PASSWORD:keepsake-local}
+    hikari:
+      # Headroom for the k6 feed test (1,000 users); the default is 10 and Postgres allows 100.
+      maximum-pool-size: ${DB_POOL_SIZE:30}
   flyway:
     enabled: true
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
@@ -32,6 +46,15 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: keepsake
+    distribution:
+      # Histogram buckets let Prometheus compute p95 (histogram_quantile) across instances and time windows.
+      percentiles-histogram:
+        http.server.requests: true
+        keepsake.media.processing: true
+        keepsake.media.queue.wait: true
 logging:
   structured:
     format:
@@ -54,5 +77,7 @@ keepsake:
     heif-decoder: ${KEEPSAKE_HEIF_DECODER:heif-dec}
     heif-info: ${KEEPSAKE_HEIF_INFO:heif-info}
     processing-timeout: ${KEEPSAKE_PROCESSING_TIMEOUT:PT10M}
+    ffmpeg: ${KEEPSAKE_FFMPEG:ffmpeg}
+    ffprobe: ${KEEPSAKE_FFPROBE:ffprobe}
   seed:
     enabled: ${KEEPSAKE_SEED_ENABLED:false}

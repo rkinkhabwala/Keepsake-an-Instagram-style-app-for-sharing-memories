@@ -2,6 +2,7 @@ package com.keepsake.user.service;
 
 import com.keepsake.common.error.ForbiddenException;
 import com.keepsake.common.error.UnauthenticatedException;
+import com.keepsake.engagement.service.EngagementCounters;
 import com.keepsake.media.entity.MediaUpload;
 import com.keepsake.media.repository.MediaUploadRepository;
 import com.keepsake.media.service.MediaStorage;
@@ -35,6 +36,7 @@ public class AccountDeletionService {
     private final MediaStorage storage;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher events;
+    private final EngagementCounters counters;
 
     public AccountDeletionService(
             UserRepository userRepository,
@@ -42,7 +44,8 @@ public class AccountDeletionService {
             MediaUploadRepository uploadRepository,
             MediaStorage storage,
             PasswordEncoder passwordEncoder,
-            ApplicationEventPublisher events
+            ApplicationEventPublisher events,
+            EngagementCounters counters
     ) {
         this.userRepository = userRepository;
         this.deletionRepository = deletionRepository;
@@ -50,6 +53,7 @@ public class AccountDeletionService {
         this.storage = storage;
         this.passwordEncoder = passwordEncoder;
         this.events = events;
+        this.counters = counters;
     }
 
     @Transactional
@@ -62,15 +66,16 @@ public class AccountDeletionService {
         List<String> keys = uploadRepository.findAllByOwnerId(userId).stream()
                 .flatMap(AccountDeletionService::storageKeys)
                 .toList();
-        deletionRepository.subtractLikes(userId);
-        deletionRepository.subtractComments(userId);
+        List<UUID> engaged = deletionRepository.findMemoriesWithEngagementBy(userId);
         deletionRepository.deleteMemories(userId);
         deletionRepository.deleteUser(userId);
-        events.publishEvent(new AccountDeleted(userId, keys));
+        events.publishEvent(new AccountDeleted(userId, keys, engaged));
     }
 
     @TransactionalEventListener
     public void removeMedia(AccountDeleted event) {
+        // The user's own memories are gone; recompute counts on the others they had engaged with.
+        counters.reconcileNow(event.engagedMemoryIds());
         try {
             storage.deleteAll(event.storageKeys());
         } catch (RuntimeException exception) {
@@ -80,6 +85,6 @@ public class AccountDeletionService {
     }
 
     private static Stream<String> storageKeys(MediaUpload upload) {
-        return Stream.of(upload.getOriginalKey(), upload.displayKeyFor(), upload.thumbKeyFor());
+        return Stream.of(upload.getOriginalKey(), upload.displayKeyFor(), upload.thumbKeyFor(), upload.videoKeyFor());
     }
 }

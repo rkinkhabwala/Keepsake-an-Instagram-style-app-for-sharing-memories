@@ -9,6 +9,12 @@ public record LoginRequest(
         String identifier,
         @NotBlank
         @Size(max = 72)
-        String password
+        String password,
+        /** The browser's IANA time zone, e.g. Europe/Paris; optional. */
+        String timeZone
 ) {
+
+    public LoginRequest(String identifier, String password) {
+        this(identifier, password, null);
+    }
 }

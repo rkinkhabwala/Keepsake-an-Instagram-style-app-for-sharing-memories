@@ -4,12 +4,12 @@ import com.keepsake.memory.entity.Memory;
 import com.keepsake.memory.service.MemoryAccessPolicy;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 /**
@@ -39,6 +39,40 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
             LIMIT :limit
             """, nativeQuery = true)
     List<Memory> findFeed(UUID viewerId, UUID cursor, int limit);
+
+    /** The newest ids of {@link #findFeed}, to rebuild a feed in Redis. */
+    @Query(value = """
+            SELECT m.id FROM memories m JOIN users a ON a.id = m.author_id
+            WHERE (m.author_id = :viewerId OR m.author_id IN (
+                    SELECT f.followee_id FROM follows f WHERE f.follower_id = :viewerId AND f.status = 'ACCEPTED'))
+                AND """ + MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL + """
+            ORDER BY m.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findFeedIds(UUID viewerId, int limit);
+
+    /** Of these fanned-out ids, the memories that still belong in the viewer's feed (same scope as findFeed). */
+    @Query(value = """
+            SELECT m.* FROM memories m JOIN users a ON a.id = m.author_id
+            WHERE m.id IN (:ids)
+                AND (m.author_id = :viewerId OR EXISTS (
+                    SELECT 1 FROM follows f WHERE f.follower_id = :viewerId AND f.followee_id = m.author_id
+                        AND f.status = 'ACCEPTED'))
+                AND """ + MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL, nativeQuery = true)
+    List<Memory> findFeedCandidatesVisibleTo(UUID viewerId, Collection<UUID> ids);
+
+    /** {@link #findFeed} limited to these authors: the followed celebrity accounts merged in at read time. */
+    @Query(value = """
+            SELECT m.* FROM memories m JOIN users a ON a.id = m.author_id
+            WHERE m.author_id IN (:authorIds)
+                AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = :viewerId
+                    AND f.followee_id = m.author_id AND f.status = 'ACCEPTED')
+                AND m.id < :cursor
+                AND """ + MemoryAccessPolicy.VISIBLE_TO_VIEWER_SQL + """
+            ORDER BY m.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Memory> findFeedFromAuthors(UUID viewerId, Collection<UUID> authorIds, UUID cursor, int limit);
 
     /** One author's memories that the viewer may see, for the profile grid. */
     @Query(value = """
@@ -80,16 +114,6 @@ public interface MemoryRepository extends JpaRepository<Memory, UUID> {
     @Query(value = "SELECT created_at FROM saves WHERE user_id = :userId AND memory_id = :memoryId",
             nativeQuery = true)
     Optional<Instant> findSaveTime(UUID userId, UUID memoryId);
-
-    @Modifying
-    @Query(value = "UPDATE memories SET like_count = GREATEST(like_count + :delta, 0) WHERE id = :memoryId",
-            nativeQuery = true)
-    void adjustLikeCount(UUID memoryId, int delta);
-
-    @Modifying
-    @Query(value = "UPDATE memories SET comment_count = GREATEST(comment_count + :delta, 0) WHERE id = :memoryId",
-            nativeQuery = true)
-    void adjustCommentCount(UUID memoryId, int delta);
 
     /**
      * Memories with coordinates inside a box, for the map: the viewer's own, those of accounts they follow

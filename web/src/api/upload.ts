@@ -8,9 +8,44 @@ const EXTENSION_TYPES: Record<string, string> = {
   webp: 'image/webp',
   heic: 'image/heic',
   heif: 'image/heif',
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
 };
 
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+export const MAX_VIDEO_SECONDS = 60;
+
+export function isVideoType(contentType: string): boolean {
+  return contentType.startsWith('video/');
+}
+
+export function maxBytesFor(contentType: string): number {
+  return isVideoType(contentType) ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+}
+
+/**
+ * A local video's length in seconds, read by the browser before uploading, or NaN if it can't tell (the server
+ * enforces the limit either way).
+ */
+export function videoDurationSeconds(file: File, timeoutMs = 3000): Promise<number> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return resolve(Number.NaN);
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    const done = (seconds: number) => {
+      window.clearTimeout(timer);
+      URL.revokeObjectURL(url);
+      resolve(seconds);
+    };
+    const timer = window.setTimeout(() => done(Number.NaN), timeoutMs);
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => done(video.duration);
+    video.onerror = () => done(Number.NaN);
+    video.src = url;
+  });
+}
 export const MAX_FILES = 10;
 
 /** Browsers often report HEIC files with an empty type, so fall back to the extension. */

@@ -1,6 +1,6 @@
 # Keepsake
 
-Keepsake is a local-first memory sharing app. The Phase 1 stack is a Java 21 / Spring Boot backend, React / TypeScript web client, PostgreSQL, Redis, and MinIO.
+Keepsake is a local-first memory sharing app. The stack is a Java 21 / Spring Boot backend, React / TypeScript web client, PostgreSQL, Redis, MinIO, and Kafka (single node, KRaft mode).
 
 ## How to run
 
@@ -11,7 +11,33 @@ Keepsake is a local-first memory sharing app. The Phase 1 stack is a Java 21 / S
 
 Demo data is opt-in, because every demo account shares a published password. With `SEED_DEMO=true` (on the command line or in `.env`), the backend seeds in the background on first start (about 30 seconds): five users, follows, close friends, and 50 memories with generated photos, likes, and comments. Log in as `ana`, `ben`, `cleo`, `dev`, or `eli`, all with the password `keepsake-demo`. `cleo` is a private account, and `ana` has a pending request to follow her. Seeding is skipped when the demo users already exist.
 
-The API health endpoint is `/actuator/health`. PostgreSQL, Redis, and MinIO data are persisted in named Compose volumes.
+The API health endpoint is `/actuator/health`. PostgreSQL, Redis, MinIO, and Kafka data are persisted in named Compose volumes. Kafka is reachable only inside the Compose network. Media processing jobs go through a transactional outbox to Kafka topics; a job that keeps failing ends up in the topic's `.DLT` dead-letter topic.
+
+## Metrics and dashboards
+
+Prometheus and Grafana run behind the `observability` Compose profile:
+
+```
+docker compose --profile observability up --build
+```
+
+- Grafana: <http://localhost:3000> opens the provisioned **Keepsake overview** dashboard (feed p50/p95 latency, feed request rate, media processing time, and media queue lag). Viewing needs no login; the admin password is `GRAFANA_ADMIN_PASSWORD` from `.env`.
+- Prometheus: <http://localhost:9090>, scraping the backend's `/actuator/prometheus` every 5 seconds.
+- Both are bound to 127.0.0.1. The metrics endpoint is reachable only inside Compose and from this machine.
+
+## Load test
+
+The k6 feed test (1,000 virtual users scrolling five feed pages each, failing if p95 reaches 300 ms) runs behind the `loadtest` Compose profile, against a running stack:
+
+```
+docker compose up -d --build --wait
+docker compose --profile loadtest run --rm k6
+```
+
+- `loadtest-seed` runs first. It is built with `mvn -Ploadtest`, which compiles in a command the normal build leaves out. The command seeds about 12,000 `lt_*` accounts once, including three accounts above the 10k-follower fan-out threshold, and about 36,000 memories. It then writes 1,000 access tokens to the `loadtest-data` volume and builds those users' feeds.
+- The tokens expire after 15 minutes. Re-running the command mints fresh ones and does not seed again.
+- k6 calls the backend directly (`http://backend:8080`) inside the Compose network. Watch the run on the Grafana dashboard if the `observability` profile is up.
+- The seeded accounts stay in the database. Don't run this against a stack whose data you want to keep clean.
 
 ## Development checks
 

@@ -21,6 +21,8 @@
         <java.version>21</java.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <aws.sdk.version>2.30.31</aws.sdk.version>
+        <!-- The load-test command is compiled only with -Ploadtest; see the loadtest profile below. -->
+        <loadtest.compiled>false</loadtest.compiled>
     </properties>
 
     <dependencyManagement>
@@ -66,6 +68,18 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -131,6 +145,11 @@
             <artifactId>minio</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -146,8 +165,51 @@
                     <!-- Lets Mockito's Byte Buddy mock classes when tests run on a JDK newer than it officially
                          supports (e.g. a local JDK 26); it has no effect on the target Java 21. -->
                     <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <systemPropertyVariables>
+                        <keepsake.loadtest.compiled>${loadtest.compiled}</keepsake.loadtest.compiled>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- mvn -Ploadtest package: also compiles src/loadtest, the load-test seeding and token-minting command
+             (com.keepsake.loadtest), which mints access tokens for seeded accounts. The default build and IDEs
+             never see those sources. -->
+        <profile>
+            <id>loadtest</id>
+            <properties>
+                <loadtest.compiled>true</loadtest.compiled>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>default-compile</id>
+                                <configuration>
+                                    <compileSourceRoots>
+                                        <compileSourceRoot>${project.basedir}/src/main/java</compileSourceRoot>
+                                        <compileSourceRoot>${project.basedir}/src/loadtest/main/java</compileSourceRoot>
+                                    </compileSourceRoots>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>default-testCompile</id>
+                                <configuration>
+                                    <compileSourceRoots>
+                                        <compileSourceRoot>${project.basedir}/src/test/java</compileSourceRoot>
+                                        <compileSourceRoot>${project.basedir}/src/loadtest/test/java</compileSourceRoot>
+                                    </compileSourceRoots>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

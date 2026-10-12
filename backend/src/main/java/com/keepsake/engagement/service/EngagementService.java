@@ -1,5 +1,6 @@
 package com.keepsake.engagement.service;
 
+import com.keepsake.notification.service.NotificationEvents;
 import com.keepsake.common.error.NotFoundException;
 import com.keepsake.common.pagination.CursorPage;
 import com.keepsake.common.pagination.CursorPageRequest;
@@ -11,7 +12,6 @@ import com.keepsake.engagement.repository.CommentRepository;
 import com.keepsake.engagement.repository.LikeRepository;
 import com.keepsake.engagement.repository.SaveRepository;
 import com.keepsake.memory.entity.Memory;
-import com.keepsake.memory.repository.MemoryRepository;
 import com.keepsake.memory.service.MemoryService;
 import java.time.Clock;
 import java.util.List;
@@ -31,37 +31,41 @@ public class EngagementService {
     private static final UUID MIN_UUID = new UUID(0L, 0L);
 
     private final MemoryService memoryService;
-    private final MemoryRepository memoryRepository;
+    private final EngagementCounters counters;
     private final LikeRepository likeRepository;
     private final SaveRepository saveRepository;
     private final CommentRepository commentRepository;
     private final CommentAssembler commentAssembler;
     private final Clock clock;
+    private final NotificationEvents notificationEvents;
 
     public EngagementService(
             MemoryService memoryService,
-            MemoryRepository memoryRepository,
+            EngagementCounters counters,
             LikeRepository likeRepository,
             SaveRepository saveRepository,
             CommentRepository commentRepository,
             CommentAssembler commentAssembler,
-            Clock clock
+            Clock clock,
+            NotificationEvents notificationEvents
     ) {
         this.memoryService = memoryService;
-        this.memoryRepository = memoryRepository;
+        this.counters = counters;
         this.likeRepository = likeRepository;
         this.saveRepository = saveRepository;
         this.commentRepository = commentRepository;
         this.commentAssembler = commentAssembler;
         this.clock = clock;
+        this.notificationEvents = notificationEvents;
     }
 
     /** Idempotent; the like count only moves when a like is actually added. */
     @Transactional
     public void like(UUID viewerId, UUID memoryId) {
-        memoryService.requireVisible(viewerId, memoryId);
+        Memory memory = memoryService.requireVisible(viewerId, memoryId);
         if (likeRepository.insertIfAbsent(viewerId, memoryId) == 1) {
-            memoryRepository.adjustLikeCount(memoryId, 1);
+            counters.likeChanged(memoryId, 1);
+            notificationEvents.liked(viewerId, memory.getAuthorId(), memoryId);
         }
     }
 
@@ -69,7 +73,7 @@ public class EngagementService {
     public void unlike(UUID viewerId, UUID memoryId) {
         memoryService.requireVisible(viewerId, memoryId);
         if (likeRepository.deleteIfPresent(viewerId, memoryId) == 1) {
-            memoryRepository.adjustLikeCount(memoryId, -1);
+            counters.likeChanged(memoryId, -1);
         }
     }
 
@@ -102,6 +106,7 @@ public class EngagementService {
         if (body.isEmpty() || body.length() > MAX_COMMENT_LENGTH) {
             throw new InvalidRequestException("Comments must be between 1 and " + MAX_COMMENT_LENGTH + " characters");
         }
+        UUID parentAuthorId = null;
         if (request.parentId() != null) {
             Comment parent = commentRepository.findById(request.parentId())
                     .filter(candidate -> candidate.getMemoryId().equals(memoryId))
@@ -112,9 +117,14 @@ public class EngagementService {
             if (parent.isDeleted()) {
                 throw new InvalidRequestException("You cannot reply to a deleted comment");
             }
+            parentAuthorId = parent.getAuthorId();
         }
         Comment comment = commentRepository.saveAndFlush(new Comment(memoryId, viewerId, request.parentId(), body));
-        memoryRepository.adjustCommentCount(memoryId, 1);
+        counters.commentChanged(memoryId, 1);
+        notificationEvents.commented(viewerId, memory.getAuthorId(), memoryId, comment.getId());
+        if (parentAuthorId != null && !parentAuthorId.equals(memory.getAuthorId())) {
+            notificationEvents.commented(viewerId, parentAuthorId, memoryId, comment.getId());
+        }
         return commentAssembler.single(viewerId, memory.getAuthorId(), comment);
     }
 
@@ -134,7 +144,7 @@ public class EngagementService {
             throw new NotFoundException("Comment not found");
         }
         if (commentRepository.softDelete(commentId, clock.instant()) == 1) {
-            memoryRepository.adjustCommentCount(comment.getMemoryId(), -1);
+            counters.commentChanged(comment.getMemoryId(), -1);
         }
     }
 }
